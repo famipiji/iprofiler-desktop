@@ -11,7 +11,17 @@ public sealed class Page
     /// <summary>Full path of the original page image (TIFF), stored untouched.</summary>
     public required string ImagePath { get; init; }
 
+    /// <summary>
+    /// Quarter-turn rotation applied on export, set by orientation detection (e.g. a sheet fed upside down)
+    /// or by the user.
+    /// </summary>
     public PageRotation Rotation { get; set; }
+
+    /// <summary>
+    /// Skew correction in degrees (positive = clockwise), measured on the original image and applied on
+    /// export only; null = not measured.
+    /// </summary>
+    public double? DeskewAngle { get; set; }
 
     /// <summary>Crop rectangle in original-image pixels; null means the whole page.</summary>
     public PixelRect? Crop { get; set; }

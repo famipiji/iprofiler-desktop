@@ -7,9 +7,12 @@ using IProfiler.Core.Domain;
 using IProfiler.Infrastructure.Ocr;
 using Microsoft.Extensions.Logging;
 
-// Milestone 1 spike. Task 1.2: full-page OCR + one field-region OCR per sample, offline. Task 1.3: barcodes.
+// Milestone 1 spike. Task 1.2: full-page OCR + one field-region OCR per sample, offline. Task 1.3: barcodes. Task 1.4: imaging.
 //   IProfiler.Spike ocr <samples dir> [report.json]
 // The samples dir holds the images and expected.json (written by tools/make-ocr-samples.py).
+
+if (args is ["imaging", var imagingDir])
+    return await ImagingSpike.RunAsync(imagingDir);
 
 if (args is ["barcodes", var barcodeDir, .. var patchFiles])
     return await BarcodeSpike.RunAsync(barcodeDir, patchFiles);
@@ -18,6 +21,7 @@ if (args is not ["ocr", var samplesDir, ..])
 {
     Console.Error.WriteLine("usage: IProfiler.Spike ocr <samples dir> [report.json]");
     Console.Error.WriteLine("       IProfiler.Spike barcodes <samples dir> [extra patch-sheet files...]");
+    Console.Error.WriteLine("       IProfiler.Spike imaging <tests TestData dir>");
     return 2;
 }
 

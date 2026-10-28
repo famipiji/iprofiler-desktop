@@ -14,6 +14,9 @@ public sealed class FakeOcrProvider : IOcrProvider
     public Task<OcrResult> RecognizeRegionAsync(string imagePath, PixelRect region, CancellationToken cancellationToken = default) =>
         Task.FromResult(Recognize(imagePath));
 
+    public Task<PageOrientation> DetectOrientationAsync(string imagePath, CancellationToken cancellationToken = default) =>
+        Task.FromResult(PageOrientation.Unknown);
+
     private static OcrResult Recognize(string imagePath)
     {
         var text = FakeBatch.Find(imagePath)?.ZoneText;

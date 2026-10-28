@@ -1,4 +1,5 @@
 using System.IO;
+using IProfiler.Application.Pages;
 using IProfiler.Application.Separation;
 using IProfiler.App.ViewModels;
 using IProfiler.Core;
@@ -56,6 +57,7 @@ public static class AppHost
         builder.Services.AddSingleton(paths);
         AddProviders(builder.Services);
         builder.Services.AddSingleton<ISeparationEngine, SeparationEngine>();
+        builder.Services.AddSingleton<IPageAnalyzer, PageAnalyzer>();
 
         builder.Services.AddTransient<MainViewModel>();
         builder.Services.AddTransient<MainWindow>();

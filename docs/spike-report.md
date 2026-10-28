@@ -91,3 +91,59 @@ signing). Pending a manual run, as for Task 0.5.
   1 px high line inside the symbol. QR boxes span the finder patterns. If M3 needs to highlight whole 1D symbols, grow the
   box from the scan line to the bar ends.
 - `ImageFile` helper (load via `ImDecode`, clip, crop with margin) is now shared by the OCR, barcode and patch providers.
+
+## Task 1.4: Image ops (deskew, blank page, orientation, rotation as metadata), 2026-10-28
+
+**Setup**
+- `OpenCvImageProcessor : IImageProcessor` (`src/IProfiler.Infrastructure/Imaging/`).
+  - **Deskew:** projection-profile search on a 1600 px copy (±10°, 0.5° steps then 0.05°); returns the clockwise correction.
+  - **White ratio:** ink = pixels darker than 128. A 2% edge band is ignored (scanner edge shadows), and specks smaller
+    than ~0.012" square are dropped.
+  - **Export render:** crop (original pixels) → deskew → quarter turn, written to a new file. Bilevel pages stay
+    bilevel (nearest neighbour). It refuses to write over the original.
+- **Review follow-ups:**
+  - `Page.DeskewAngle` (`double?`, metadata only, applied on export).
+  - `IOcrProvider.DetectOrientationAsync` → `PageOrientation` (stored as `Page.Rotation`).
+  - `IPageAnalyzer` / `PageAnalyzer` (Application layer) sets both when a page arrives; registered in `AppHost`.
+- **Orientation method:** text detection once. The 8 largest line boxes (each cut to ≤ 8 line-heights wide) are
+  recognised as they are and turned 180°; Rotate180 wins if its mean confidence is ≥ 0.10 higher. This is the "0° vs
+  180° OCR confidence" check without two full-page OCR passes.
+- Test pages: `tools/make-imaging-samples.py` → 300 dpi 1-bit G4 blank page with specks, near-blank page (specks + staple
+  + staple shadow + left-edge scanner shadow), the same in grayscale JPEG with paper texture, a sparse page ("Page 2 of
+  2" only), the delivery note at 3° skew, and the delivery note upside down.
+
+**Results** (dev PC, Release)
+
+| Page | Skew correction | White ratio → @0.99 | Orientation (upright / 180°) |
+|---|---|---|---|
+| blank G4 | 0.00 | 1.00000 → **blank** ✅ | none (no text) |
+| near-blank G4, staple + shadow + specks | 0.00 | 0.99980 → **blank** ✅ | none (no text) |
+| near-blank grayscale JPEG, staple + shadow | 0.00 | 0.99980 → **blank** ✅ | none |
+| delivery note G4 (0.5° generated) | **0.50** ✅ | 0.96957 → content ✅ | upright (0.87 / 0.42) ✅ |
+| delivery note G4 (3.0° generated) | **2.95** ✅ | 0.96951 → content ✅ | upright (0.87 / 0.42) ✅ |
+| delivery note G4, **upside down** | **0.50** ✅ | 0.96957 → content ✅ | **Rotate180** (0.41 / 0.89) ✅ |
+| invoice 150 dpi PNG (straight) | 0.05 ✅ | 0.98721 → content ✅ | upright (0.98 / 0.38) ✅ |
+| patch sheet T (0.3° generated) | 0.25 ✅ | 0.98730 → content ✅ | upright |
+| sparse page ("Page 2 of 2" only) | 0.00 | 0.99979 → **blank ⚠** | upright (0.99 / 0.41, 1 line) |
+
+- **Timings:** skew 40–170 ms, white ratio 20–70 ms, orientation **~2.3 s** per text page (~1 s on a blank page:
+  detection only). The first version sampled 12 full-width lines and took ~4.1 s.
+- **Original unchanged:** SHA-256 of the original TIFF is identical before and after `PageAnalyzer` and after exporting with
+  rotation + deskew + crop. The upside-down page exported with `Rotate180` is **pixel-identical** to the upright note.
+  A 3° page exported with `DeskewAngle = 3.0` measures straight (within ±0.15°).
+
+**Findings / follow-ups**
+- **Sparse pages count as blank.** White ratio alone can't tell a page with one short line ("Page 2 of 2", a lone
+  signature) from a blank one: 0.99979 vs 0.99980 for the stapled blank. For M3 blank-page separation, add a second
+  check. The orientation pass already shows it: the sparse page has one text line read at 0.99 confidence, the blank
+  pages have none. So "white ratio ≥ threshold **and** no confident text line" is a cheap fix.
+- **Orientation cost:** at ~2.3 s it's nearly a full OCR pass. In the real pipeline (M2/M3), take the upright score from
+  the page's normal OCR and only run the 180° check when that confidence is low.
+- **90°/270° pages** (landscape sheets fed sideways) aren't detected yet; the same comparison works with quarter turns
+  if needed.
+- **Crop then deskew:** `Page.Crop` is in original pixels, so export crops first and then deskews, which can clip the
+  corners of a tight crop. If M2's crop tool works on the deskewed view, store the crop in deskewed coordinates instead.
+- Export writes via OpenCV (8-bit). Writing G4 output is Task 1.5 (LibTiff).
+- `Page.DeskewAngle` needs a column in the Task 1.5 EF model.
+- The image-processor tests use OpenCvSharp directly to compare exported pixels. The layering rule (third-party
+  imaging only in Infrastructure) is enforced for the `src/` projects; the test project is outside it.

@@ -1,0 +1,8 @@
+{
+  "skewCorrection": {
+    "barcode/bw-g4-300dpi.tif": 0.5,
+    "imaging/skew-3deg-g4.tif": 3.0,
+    "imaging/upside-down-g4.tif": 0.5,
+    "ocr/invoice-150dpi.png": 0.0
+  }
+}

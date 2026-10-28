@@ -8,6 +8,18 @@ public interface IOcrProvider
     Task<OcrResult> RecognizePageAsync(string imagePath, CancellationToken cancellationToken = default);
 
     Task<OcrResult> RecognizeRegionAsync(string imagePath, PixelRect region, CancellationToken cancellationToken = default);
+
+    /// <summary>Whether the page reads upright or upside down (a sheet fed the wrong way round).</summary>
+    Task<PageOrientation> DetectOrientationAsync(string imagePath, CancellationToken cancellationToken = default);
+}
+
+/// <param name="Rotation">The rotation that makes the page upright: <see cref="PageRotation.None"/> or <see cref="PageRotation.Rotate180"/>.</param>
+/// <param name="UprightScore">Recognition confidence (0..1) reading the sampled lines as they are.</param>
+/// <param name="RotatedScore">Recognition confidence (0..1) reading the same lines turned 180 degrees.</param>
+/// <param name="LinesSampled">Text lines compared; 0 means no text was found and the page is left as it is.</param>
+public sealed record PageOrientation(PageRotation Rotation, double UprightScore, double RotatedScore, int LinesSampled)
+{
+    public static PageOrientation Unknown { get; } = new(PageRotation.None, 0, 0, 0);
 }
 
 public sealed record OcrResult(IReadOnlyList<OcrLine> Lines)

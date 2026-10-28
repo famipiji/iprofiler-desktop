@@ -1,7 +1,10 @@
+using System.Security.Cryptography;
 using System.Text.Json;
+using IProfiler.Application.Pages;
 using IProfiler.Core;
 using IProfiler.Core.Domain;
 using IProfiler.Core.Recognition;
+using IProfiler.Infrastructure.Imaging;
 using IProfiler.Infrastructure.Ocr;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -78,6 +81,45 @@ public class PaddleOcrProviderTests(PaddleOcrFixture fixture) : IClassFixture<Pa
 
         Assert.All(words, w => Assert.Contains(w, result.Text));
         Assert.Contains("Ship to: Meridian Office Supplies, Petaling Jaya", result.Text);
+    }
+
+    [Theory]
+    [InlineData("imaging/upside-down-g4.tif", PageRotation.Rotate180)]
+    [InlineData("barcode/bw-g4-300dpi.tif", PageRotation.None)]
+    [InlineData("imaging/skew-3deg-g4.tif", PageRotation.None)]
+    [InlineData("ocr/invoice-150dpi.png", PageRotation.None)]
+    public async Task Orientation_detects_pages_fed_upside_down(string page, PageRotation expected)
+    {
+        var orientation = await fixture.Provider.DetectOrientationAsync(Path.Combine(AppContext.BaseDirectory, "TestData", page));
+
+        Assert.Equal(expected, orientation.Rotation);
+        Assert.True(Math.Abs(orientation.UprightScore - orientation.RotatedScore) > 0.3,
+            $"scores too close to call: {orientation}");
+    }
+
+    [Fact]
+    public async Task Orientation_of_a_blank_page_is_left_alone()
+    {
+        var orientation = await fixture.Provider.DetectOrientationAsync(
+            Path.Combine(AppContext.BaseDirectory, "TestData", "imaging", "blank-g4.tif"));
+
+        Assert.Equal(PageOrientation.Unknown, orientation);
+    }
+
+    [Fact]
+    public async Task Page_analyzer_stores_rotation_and_deskew_as_metadata_only()
+    {
+        var path = Path.Combine(AppContext.BaseDirectory, "TestData", "imaging", "upside-down-g4.tif");
+        var before = Convert.ToHexString(SHA256.HashData(await File.ReadAllBytesAsync(path)));
+        var analyzer = new PageAnalyzer(fixture.Provider, new OpenCvImageProcessor(NullLogger<OpenCvImageProcessor>.Instance),
+            NullLogger<PageAnalyzer>.Instance);
+        var page = new Page { ImagePath = path };
+
+        await analyzer.AnalyzeAsync(page);
+
+        Assert.Equal(PageRotation.Rotate180, page.Rotation);
+        Assert.InRange(page.DeskewAngle!.Value, 0.35, 0.65);
+        Assert.Equal(before, Convert.ToHexString(SHA256.HashData(await File.ReadAllBytesAsync(path))));
     }
 
     [Fact]

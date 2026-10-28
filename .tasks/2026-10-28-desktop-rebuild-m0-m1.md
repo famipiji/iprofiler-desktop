@@ -1,6 +1,6 @@
 # iProfiler Desktop — Rebuild Plan, Milestones 0–1 — 2026-10-28
 
-## STATUS: In Progress: M0 done (0.2–0.6 ✅, M0 gate = team-lead review pending; 0.1 office part done); 1.2 OCR ✅ (network-off Sandbox run moved to 1.6); 1.3 barcodes/QR/patch ✅ (AD7100 hardware patch codes → 1.1); next: 1.4
+## STATUS: In Progress: M0 done (0.2–0.6 ✅, M0 gate = team-lead review pending; 0.1 office part done); 1.2 OCR ✅, 1.3 barcodes/QR/patch ✅, 1.4 deskew/blank/orientation ✅; next: 1.5 (then 1.1 with the AD7100, 1.6)
 
 Execution plan for **iProfiler_Desktop_Rebuild_Plan.docx** (28 Aug 2026): a greenfield
 .NET / WPF rebuild of the legacy iProfiler ScanStation (WinForms + GdPicture). This is a **new
@@ -341,6 +341,16 @@ provider classes (those are kept). No real UI yet.
 2. Confirm the original TIFF is byte-identical after rotating a page in the model.
 
 **Verify:** a skewed scan gets a sensible angle; a blank page and a near-blank page (a page with just a staple shadow) are classified correctly at the default threshold; hash of the original TIFF unchanged.
+
+**Result (2026-10-28): ✅** (details: `docs/spike-report.md`)
+- `OpenCvImageProcessor`: projection-profile deskew, white ratio (2% edge band ignored, specks dropped), and export render (crop → deskew → quarter turn into a new file; bilevel stays bilevel; won't overwrite the original).
+- **Review follow-ups:** `Page.DeskewAngle` (metadata, applied on export). Upside-down detection via `IOcrProvider.DetectOrientationAsync`: one text detection, then the 8 largest lines recognised at 0° and 180°, comparing mean confidence. Stored as `Page.Rotation` by the new `IPageAnalyzer`/`PageAnalyzer` (Application layer, registered in `AppHost`).
+- **Skew:** 0.5° G4 note → **0.50**; 3.0° G4 note → **2.95**; upside-down note → 0.50; straight invoice → 0.05; 40–170 ms.
+- **Blank at the default 0.99:** blank G4 **1.00000**, stapled near-blank G4 (staple + shadow + specks + edge shadow) **0.99980**, and the same in grayscale JPEG **0.99980**: all blank ✅. Content pages 0.969–0.987: not blank ✅.
+- **Orientation:** the upside-down G4 note → **Rotate180** (0.41 vs 0.89); upright pages → None (0.87–0.98 vs 0.38–0.42); blank pages → no text, left alone. ~2.3 s per text page.
+- **Original unchanged:** SHA-256 is identical after `PageAnalyzer` and after export with rotation + deskew + crop. The upside-down page exported with `Rotate180` is pixel-identical to the upright note.
+- Tests: **95/95** (+21).
+- ⚠ **Finding:** a sparse page ("Page 2 of 2" only) scores 0.99979, so it counts as **blank**. M3 should use "white ratio ≥ threshold **and** no confident text line" (orientation/OCR already gives that). Other follow-ups: reuse the normal OCR pass for the upright score (M2/M3); 90°/270° not covered; crop-then-deskew order; DeskewAngle column in 1.5.
 
 ### Task 1.5: SQLite + PDF/TIFF output
 

@@ -27,6 +27,12 @@ public sealed class PaddleOcrProvider(AppPaths paths, ILogger<PaddleOcrProvider>
     // White margin around a region crop: the detector misses text that touches the image edge.
     private const int RegionPadding = 16;
 
+    // Orientation: the largest text boxes are read both ways round, each cut to at most this many line
+    // heights long (recognition cost grows with width); 180 deg must win by the margin.
+    private const int OrientationSampleLines = 8;
+    private const int OrientationMaxAspect = 8;
+    private const double OrientationMargin = 0.10;
+
     private readonly Lock _gate = new();
     private PaddleOcrAll? _engine;
     private bool _disposed;
@@ -41,6 +47,15 @@ public sealed class PaddleOcrProvider(AppPaths paths, ILogger<PaddleOcrProvider>
     /// <summary>OCR of one rectangle of the page ("FlyOCR"). Boxes come back in page pixels.</summary>
     public Task<OcrResult> RecognizeRegionAsync(string imagePath, PixelRect region, CancellationToken cancellationToken = default) =>
         Task.Run(() => Recognize(imagePath, region, cancellationToken), cancellationToken);
+
+    /// <summary>
+    /// Upright vs upside down: text detection once (box positions don't depend on the reading direction),
+    /// then the same line crops are recognised as they are and turned 180 degrees. Upside-down text reads
+    /// as low-confidence garbage, so the direction with the clearly higher mean confidence wins. Much
+    /// cheaper than two full-page OCR passes.
+    /// </summary>
+    public Task<PageOrientation> DetectOrientationAsync(string imagePath, CancellationToken cancellationToken = default) =>
+        Task.Run(() => DetectOrientation(imagePath, cancellationToken), cancellationToken);
 
     public void Dispose()
     {
@@ -95,6 +110,65 @@ public sealed class PaddleOcrProvider(AppPaths paths, ILogger<PaddleOcrProvider>
             inference.ElapsedMilliseconds, total.ElapsedMilliseconds);
 
         return new OcrResult(lines);
+    }
+
+    private PageOrientation DetectOrientation(string imagePath, CancellationToken cancellationToken)
+    {
+        var sw = Stopwatch.StartNew();
+        using var page = ImageFile.Load(imagePath, ImreadModes.Color);
+        using var input = Prepare(page, new BoxMap(new PixelRect(0, 0, page.Width, page.Height), 0));
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var upright = new List<Mat>();
+        var rotated = new List<Mat>();
+        try
+        {
+            PaddleOcrRecognizerResult[] asIs, turned;
+            lock (_gate)
+            {
+                ObjectDisposedException.ThrowIf(_disposed, this);
+                var boxes = Engine.Detector.Run(input)
+                    .Where(b => Math.Min(b.Size.Width, b.Size.Height) >= 8)
+                    .OrderByDescending(b => b.Size.Width * b.Size.Height)
+                    .Take(OrientationSampleLines);
+                foreach (var box in boxes)
+                {
+                    using var line = PaddleOcrAll.GetRotateCropImage(input, box);
+                    var crop = line.Width > OrientationMaxAspect * line.Height
+                        ? new Mat(line, new Rect(0, 0, OrientationMaxAspect * line.Height, line.Height)).Clone()
+                        : line.Clone();
+                    upright.Add(crop);
+                    var flipped = new Mat();
+                    Cv2.Rotate(crop, flipped, RotateFlags.Rotate180);
+                    rotated.Add(flipped);
+                }
+
+                if (upright.Count == 0)
+                {
+                    logger.LogInformation("Orientation {File}: no text found, left as it is", Path.GetFileName(imagePath));
+                    return PageOrientation.Unknown;
+                }
+
+                asIs = Engine.Recognizer.Run([.. upright]);
+                turned = Engine.Recognizer.Run([.. rotated]);
+            }
+
+            var uprightScore = MeanConfidence(asIs);
+            var rotatedScore = MeanConfidence(turned);
+            var rotation = rotatedScore > uprightScore + OrientationMargin ? PageRotation.Rotate180 : PageRotation.None;
+            logger.LogInformation(
+                "Orientation {File}: {Rotation} (upright {Upright:F2} vs 180 deg {Rotated:F2} over {Lines} lines) in {ElapsedMs} ms",
+                Path.GetFileName(imagePath), rotation, uprightScore, rotatedScore, upright.Count, sw.ElapsedMilliseconds);
+            return new PageOrientation(rotation, uprightScore, rotatedScore, upright.Count);
+        }
+        finally
+        {
+            foreach (var m in upright.Concat(rotated))
+                m.Dispose();
+        }
+
+        static double MeanConfidence(PaddleOcrRecognizerResult[] results) =>
+            results.Average(r => string.IsNullOrWhiteSpace(r.Text) ? 0.0 : r.Score);
     }
 
     /// <summary>Created inside the lock on first use, so the first call pays the model-loading cost.</summary>
