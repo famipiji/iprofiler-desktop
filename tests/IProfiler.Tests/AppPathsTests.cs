@@ -23,6 +23,7 @@ public class AppPathsTests
         Assert.Equal(@"C:\Users\x\AppData\Local\iProfiler\logs", paths.Logs);
         Assert.Equal(@"C:\Users\x\AppData\Local\iProfiler\scans", paths.Scans);
         Assert.Equal(@"C:\Users\x\AppData\Local\iProfiler\iprofiler.db", paths.Database);
+        Assert.Equal(@"C:\Users\x\AppData\Local\iProfiler\startup-error.log", paths.StartupErrorLog);
         Assert.Equal(@"C:\Program Files\iProfiler\models", paths.Models);
     }
 }

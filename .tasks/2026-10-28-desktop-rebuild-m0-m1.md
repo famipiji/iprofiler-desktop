@@ -1,6 +1,6 @@
 # iProfiler Desktop — Rebuild Plan, Milestones 0–1 — 2026-10-28
 
-## STATUS: In Progress: Tasks 0.2–0.4 done; Task 0.1 deferred until before 1.1; next: Task 0.5
+## STATUS: In Progress: Tasks 0.2–0.4 done; Task 0.5 built, Verify pending (manual Sandbox test); Task 0.1 deferred until before 1.1
 
 Execution plan for **iProfiler_Desktop_Rebuild_Plan.docx** (28 Aug 2026): a greenfield
 .NET / WPF rebuild of the legacy iProfiler ScanStation (WinForms + GdPicture). This is a **new
@@ -180,6 +180,27 @@ Also (D7): copy a set of **legacy ScanStation config files** from one real site 
 3. Note the code-signing gap in the README (cert needed before the pilot).
 
 **Verify (in Windows Sandbox):** install, then launch **from the Start-menu shortcut** (this proves the path handling works outside the install dir), the fake pages show, the log is written, uninstall leaves no files in Program Files. Record the installer size (the baseline before the PaddleOCR models are added).
+
+**Result (2026-10-28): ⏳ build done; Verify pending (manual Sandbox test by the user)**
+- **Publish:** `dotnet publish src/IProfiler.App -c Release -r win-x64 --self-contained true` → `artifacts/publish/win-x64`: 150 MB, 308 files.
+- **Installer:** `installer/iprofiler.iss` (Inno Setup 6.7.3) → `installer/Output/iProfilerDesktop-Setup-0.1.0.0.exe`, **46.8 MB (49,085,283 bytes)**. That is the baseline before the PaddleOCR models.
+  - Per-machine install to `{autopf}\iProfiler Desktop`, x64 only.
+  - Start-menu shortcut `{autoprograms}\iProfiler Desktop`, with no working directory set on purpose.
+  - Version comes from the published exe (0.1.0.0).
+  - Uninstall keeps `%LOCALAPPDATA%\iProfiler`. An interactive uninstall asks (default No); a silent one removes the data only with `/REMOVEDATA=1`.
+  - `installer/build-installer.ps1` does both the publish and the compile. It wasn't run as a script here because the agent's permission check blocked `-ExecutionPolicy Bypass`; its two steps were run directly.
+- **Review follow-up (Task 0.4):**
+  - A failure before Serilog is up shows a message box and writes `%LOCALAPPDATA%\iProfiler\startup-error.log`. If that fails, it writes `%TEMP%\iProfiler-startup-error.log`, which also records why the first file failed (`App/Startup/StartupErrorLog.cs`, `AppPaths.StartupErrorLog`).
+  - A failure after logging is up is logged, and the user sees a message box.
+  - Unhandled UI exception: logged as critical, then a friendly message box, then `Shutdown(1)`, so `OnExit` flushes the log. Not exercised at runtime (the app has no way to trigger one).
+- README: installer section, startup-error log locations, and the code-signing gap in more detail.
+- Build: 0 warnings, 0 errors. Tests: **50/50 passed** (3 new `StartupErrorLog` tests, plus a `StartupErrorLog` path check in `AppPathsTests`).
+- **Sandbox attempt (automated, networking disabled): ❌ blocked.** The silent install was refused by Windows inside the sandbox: *"An Application Control policy has blocked this file."* The installer is unsigned (`Get-AuthenticodeSignature`: NotSigned). Smart App Control on the host is off, so the policy is the sandbox's own. It's unknown whether it blocks all unsigned files or only files run from the mapped folder. Nothing was installed, so no Verify check ran. Per the user: no retry. **Risk for the pilot:** client PCs with App Control / Smart App Control on may block the unsigned installer and app; this adds to the code-signing gap (risk register, Task 0.6).
+- **Still to do (user, manual):** in Windows Sandbox:
+  1. Install, then launch from the Start-menu shortcut. Check the 8 fake pages show and `%LOCALAPPDATA%\iProfiler\logs\iprofiler-*.log` is written.
+  2. Uninstall, and check `C:\Program Files\iProfiler Desktop` is gone and the data folder is kept.
+  3. Optionally, make `%LOCALAPPDATA%\iProfiler\logs` a file to see the startup-error message and `startup-error.log`.
+  4. Record the results here.
 
 ### Task 0.6: Backlog + process artifacts 👤 manual
 

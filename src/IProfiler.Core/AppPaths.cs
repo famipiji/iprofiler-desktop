@@ -32,4 +32,7 @@ public sealed class AppPaths
     public string Scans => Path.Combine(Data, "scans");
 
     public string Database => Path.Combine(Data, "iprofiler.db");
+
+    /// <summary>Plain-text log for failures that happen before Serilog is running.</summary>
+    public string StartupErrorLog => Path.Combine(Data, "startup-error.log");
 }
