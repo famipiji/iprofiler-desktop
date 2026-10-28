@@ -123,7 +123,8 @@ Also (D7): copy a set of **legacy ScanStation config files** from one real site 
 - Violation check: ZXing.Net 0.16.11 added to Application temporarily. With only `using ZXing;` → **1 failed** (package rule; a bare `using` leaves nothing in IL, so the IL rule alone can't see it). With a type that uses `BarcodeFormat` → **2 failed** (IL rule names `IProfiler.Application.ArchViolationProbe`, plus the package rule). Reverted → 15/15 pass.
 - Fixed along the way: `App.xaml.cs` now derives from `System.Windows.Application`. Without that, as soon as `IProfiler.Application` contains a type, `Application` inside `IProfiler.App` resolves to that namespace (CS0118).
 - `.github/workflows/ci.yml`: `windows-latest`, setup-dotnet from `global.json`, restore → build Release → test (trx uploaded), on every push/PR. Its steps were run locally: pass.
-- **Pending (needs you):** create the GitHub repo `iprofiler-desktop`, add the remote, push `main`, and confirm the first CI run is green. `gh` CLI is not installed here.
+- ✅ Pushed: `main` at `ac1c710` is on `origin` (github.com/famipiji/iprofiler-desktop). **Still to confirm:** the first CI run is green (GitHub → Actions).
+- Review (2026-10-28): approved. Follow-ups folded into Task 0.4: also restrict `Microsoft.EntityFrameworkCore` to `IProfiler.Data`, and `Serilog` sinks to `IProfiler.App`/`Infrastructure`.
 
 ### Task 0.4: Interfaces, domain model, logging, paths (no real providers yet)
 
