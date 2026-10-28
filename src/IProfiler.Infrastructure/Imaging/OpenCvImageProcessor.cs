@@ -30,15 +30,13 @@ public sealed class OpenCvImageProcessor(ILogger<OpenCvImageProcessor> logger) :
     // Pages with less ink than this fraction have no lines to measure skew from.
     private const double MinInkForSkew = 0.0005;
 
-    private const double A4ShortSideInches = 8.27;
-
     public Task<double> DetectSkewAngleAsync(string imagePath, CancellationToken cancellationToken = default) =>
         Task.Run(() => DetectSkewAngle(imagePath, cancellationToken), cancellationToken);
 
     public Task<double> GetWhiteRatioAsync(string imagePath, CancellationToken cancellationToken = default) =>
         Task.Run(() => GetWhiteRatio(imagePath), cancellationToken);
 
-    public Task RenderForExportAsync(Page page, string outputPath, CancellationToken cancellationToken = default) =>
+    public Task<ExportGeometry> RenderForExportAsync(Page page, string outputPath, CancellationToken cancellationToken = default) =>
         Task.Run(() => Render(page, outputPath), cancellationToken);
 
     /// <summary>
@@ -116,7 +114,7 @@ public sealed class OpenCvImageProcessor(ILogger<OpenCvImageProcessor> logger) :
         using var centroids = new Mat();
         var count = Cv2.ConnectedComponentsWithStats(ink, labels, stats, centroids, PixelConnectivity.Connectivity8);
 
-        var dpi = Math.Min(gray.Width, gray.Height) / A4ShortSideInches;
+        var dpi = ImageFile.Dpi(imagePath, gray.Width, gray.Height);
         var minArea = Math.Max(2, (int)(SpeckSquareInches * dpi * dpi));
         long inkPixels = 0;
         var specks = 0;
@@ -130,30 +128,32 @@ public sealed class OpenCvImageProcessor(ILogger<OpenCvImageProcessor> logger) :
         }
 
         var ratio = 1.0 - (double)inkPixels / ((long)content.Width * content.Height);
-        logger.LogInformation("White ratio {File}: {Ratio:F5} ({InkPixels} ink px, {Specks} specks ignored) in {ElapsedMs} ms",
-            Path.GetFileName(imagePath), ratio, inkPixels, specks, sw.ElapsedMilliseconds);
+        logger.LogInformation("White ratio {File}: {Ratio:F5} ({InkPixels} ink px, {Specks} specks ignored at {Dpi:F0} dpi) in {ElapsedMs} ms",
+            Path.GetFileName(imagePath), ratio, inkPixels, specks, dpi, sw.ElapsedMilliseconds);
         return ratio;
     }
 
-    /// <summary>Order: crop (original pixels) → deskew → quarter-turn rotation. Writes a new file; the original is only read.</summary>
-    private void Render(Page page, string outputPath)
+    /// <summary>
+    /// The steps of <see cref="ExportGeometry"/>: crop (original pixels) → deskew → quarter-turn rotation. Writes a
+    /// new file; the original is only read.
+    /// </summary>
+    private ExportGeometry Render(Page page, string outputPath)
     {
         if (string.Equals(Path.GetFullPath(outputPath), Path.GetFullPath(page.ImagePath), StringComparison.OrdinalIgnoreCase))
             throw new ArgumentException("Export must not overwrite the original page image.", nameof(outputPath));
 
         var sw = Stopwatch.StartNew();
         using var original = ImageFile.Load(page.ImagePath, ImreadModes.Unchanged);
-        var area = ImageFile.Clip(page.Crop ?? new PixelRect(0, 0, original.Width, original.Height), original.Width, original.Height);
-        if (area.Width == 0 || area.Height == 0)
-            throw new InvalidOperationException($"Crop {page.Crop} lies outside {page.ImagePath}.");
+        var geometry = new ExportGeometry(page, original.Width, original.Height);
+        var area = geometry.Area;
 
         using var cropped = new Mat(original, new Rect(area.X, area.Y, area.Width, area.Height));
-        using var deskewed = Deskew(cropped, page.DeskewAngle ?? 0);
+        using var deskewed = Deskew(cropped, geometry.DeskewDegrees);
         using var output = new Mat();
-        if (page.Rotation == PageRotation.None)
+        if (geometry.Rotation == PageRotation.None)
             deskewed.CopyTo(output);
         else
-            Cv2.Rotate(deskewed, output, page.Rotation switch
+            Cv2.Rotate(deskewed, output, geometry.Rotation switch
             {
                 PageRotation.Clockwise90 => RotateFlags.Rotate90Clockwise,
                 PageRotation.Rotate180 => RotateFlags.Rotate180,
@@ -166,12 +166,13 @@ public sealed class OpenCvImageProcessor(ILogger<OpenCvImageProcessor> logger) :
         File.WriteAllBytes(outputPath, output.ImEncode(Path.GetExtension(outputPath)));
 
         logger.LogInformation("Rendered {File} → {Output} ({Width}x{Height}; crop {Crop}, deskew {Deskew} deg, rotation {Rotation}) in {ElapsedMs} ms",
-            Path.GetFileName(page.ImagePath), outputPath, output.Width, output.Height, page.Crop, page.DeskewAngle, page.Rotation, sw.ElapsedMilliseconds);
+            Path.GetFileName(page.ImagePath), outputPath, output.Width, output.Height, page.Crop, geometry.DeskewDegrees, page.Rotation, sw.ElapsedMilliseconds);
+        return geometry;
     }
 
     private static Mat Deskew(Mat image, double clockwiseDegrees)
     {
-        if (Math.Abs(clockwiseDegrees) < 0.01)
+        if (clockwiseDegrees == 0)
             return image.Clone();
 
         // Bilevel scans stay bilevel (nearest neighbour); greyscale and colour get smooth edges.

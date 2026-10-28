@@ -10,7 +10,16 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 namespace IProfiler.Tests.Ocr;
 
-/// <summary>One engine for the whole class: loading the models takes a couple of seconds.</summary>
+/// <summary>
+/// One engine for every OCR test class: loading the models takes a couple of seconds, and two engines loading
+/// at the same time in one process crash inside Paddle (op_info_impl.cc), so the app's singleton is a must.
+/// </summary>
+[CollectionDefinition(Name)]
+public sealed class PaddleOcrCollection : ICollectionFixture<PaddleOcrFixture>
+{
+    public const string Name = "PaddleOCR engine";
+}
+
 public sealed class PaddleOcrFixture : IDisposable
 {
     public PaddleOcrFixture()
@@ -44,7 +53,8 @@ public sealed class PaddleOcrFixture : IDisposable
     }
 }
 
-public class PaddleOcrProviderTests(PaddleOcrFixture fixture) : IClassFixture<PaddleOcrFixture>
+[Collection(PaddleOcrCollection.Name)]
+public class PaddleOcrProviderTests(PaddleOcrFixture fixture)
 {
     private const int PageWidth = 1240;
     private const int PageHeight = 1754;

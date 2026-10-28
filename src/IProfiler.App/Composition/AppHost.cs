@@ -12,6 +12,7 @@ using IProfiler.Core.Recognition;
 using IProfiler.Core.Scanning;
 using IProfiler.Core.Separation;
 using IProfiler.Core.Upload;
+using IProfiler.Data;
 using IProfiler.Infrastructure.Ai;
 using IProfiler.Infrastructure.Fakes;
 using Microsoft.Extensions.DependencyInjection;
@@ -55,6 +56,8 @@ public static class AppHost
             dispose: true);
 
         builder.Services.AddSingleton(paths);
+        // Real SQLite store (metadata only). MigrateCaptureDatabaseAsync runs at startup once a screen uses it (M2).
+        builder.Services.AddCaptureDatabase(paths);
         AddProviders(builder.Services);
         builder.Services.AddSingleton<ISeparationEngine, SeparationEngine>();
         builder.Services.AddSingleton<IPageAnalyzer, PageAnalyzer>();

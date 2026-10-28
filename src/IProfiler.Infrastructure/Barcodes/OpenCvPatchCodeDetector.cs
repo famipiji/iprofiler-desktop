@@ -14,15 +14,13 @@ namespace IProfiler.Infrastructure.Barcodes;
 /// </summary>
 /// <remarks>
 /// Spike-level prototype:
-/// - Resolution is estimated from the page's short side (A4 8.27"; Letter is within 3%), because OpenCV
-///   doesn't expose the TIFF's DPI.
+/// - Resolution comes from the TIFF's resolution tag; other formats are estimated from the page's short side.
 /// - Vertical bars are read left to right and horizontal bars top to bottom. On a sheet fed upside down
 ///   the order reverses, which turns Patch 1 into Patch 6 and Patch 3 into Patch T. Page orientation
 ///   (Task 1.4) has to be known first, or the scanner's own detection used.
 /// </remarks>
 public sealed class OpenCvPatchCodeDetector(ILogger<OpenCvPatchCodeDetector> logger) : IPatchCodeDetector
 {
-    private const double A4ShortSideInches = 8.27;
     private const double NarrowInches = 0.08;
     private const double WideInches = 0.20;
 
@@ -43,7 +41,7 @@ public sealed class OpenCvPatchCodeDetector(ILogger<OpenCvPatchCodeDetector> log
     {
         var sw = Stopwatch.StartNew();
         using var page = ImageFile.Load(imagePath, ImreadModes.Grayscale);
-        var dpi = Math.Min(page.Width, page.Height) / A4ShortSideInches;
+        var dpi = ImageFile.Dpi(imagePath, page.Width, page.Height);
 
         using var ink = new Mat();
         Cv2.Threshold(page, ink, 0, 255, ThresholdTypes.BinaryInv | ThresholdTypes.Otsu);
@@ -59,7 +57,7 @@ public sealed class OpenCvPatchCodeDetector(ILogger<OpenCvPatchCodeDetector> log
         var code = Find(bars.Where(b => b.Height > b.Width).Select(b => new Bar(b.X, b.Width, b.Y, b.Bottom)), dpi)
                    ?? Find(bars.Where(b => b.Width > b.Height).Select(b => new Bar(b.Y, b.Height, b.X, b.Right)), dpi);
 
-        logger.LogInformation("Patch code {File}: {PatchCode} ({Bars} bar candidates, ~{Dpi:F0} dpi) in {ElapsedMs} ms",
+        logger.LogInformation("Patch code {File}: {PatchCode} ({Bars} bar candidates, {Dpi:F0} dpi) in {ElapsedMs} ms",
             Path.GetFileName(imagePath), code?.ToString() ?? "none", bars.Count, dpi, sw.ElapsedMilliseconds);
         return code;
     }

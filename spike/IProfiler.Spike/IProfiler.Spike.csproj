@@ -9,6 +9,8 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\IProfiler.Core\IProfiler.Core.csproj" />
+    <ProjectReference Include="..\..\src\IProfiler.Application\IProfiler.Application.csproj" />
+    <ProjectReference Include="..\..\src\IProfiler.Data\IProfiler.Data.csproj" />
     <ProjectReference Include="..\..\src\IProfiler.Infrastructure\IProfiler.Infrastructure.csproj" />
   </ItemGroup>
   <ItemGroup>

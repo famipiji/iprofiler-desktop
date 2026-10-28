@@ -33,6 +33,12 @@ public sealed class PaddleOcrProvider(AppPaths paths, ILogger<PaddleOcrProvider>
     private const int OrientationMaxAspect = 8;
     private const double OrientationMargin = 0.10;
 
+    // Letter-spaced text: at least this many letters, typical letter gap at least this fraction of a letter's
+    // width (ordinary text is ~0.1-0.2), and a word break is a gap this many times the typical letter gap.
+    private const int LetterSpacedMinLetters = 4;
+    private const double LetterSpacedMinGap = 0.35;
+    private const double LetterSpacedWordGap = 1.6;
+
     private readonly Lock _gate = new();
     private PaddleOcrAll? _engine;
     private bool _disposed;
@@ -219,7 +225,8 @@ public sealed class PaddleOcrProvider(AppPaths paths, ILogger<PaddleOcrProvider>
         var words = WordSpans(region.Text, input, box)
             .Select(w => new OcrWord(w.Text, map.ToPage(new Rect(w.Left, box.Y, w.Right - w.Left, box.Height))))
             .ToList();
-        return new OcrLine(region.Text, map.ToPage(box), region.Score, words);
+        // The words can differ from the recogniser's spacing (letter-spaced text), so the line is rebuilt from them.
+        return new OcrLine(string.Join(' ', words.Select(w => w.Text)), map.ToPage(box), region.Score, words);
     }
 
     /// <summary>
@@ -230,7 +237,8 @@ public sealed class PaddleOcrProvider(AppPaths paths, ILogger<PaddleOcrProvider>
     private List<(string Text, int Left, int Right)> WordSpans(string text, Mat input, Rect box)
     {
         var words = text.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        if (words.Length <= 1 || box.Width < 2 || box.Height < 2)
+        var letters = string.Concat(words);
+        if (box.Width < 2 || box.Height < 2 || (words.Length <= 1 && letters.Length < LetterSpacedMinLetters))
             return [(text.Trim(), box.Left, box.Right)];
 
         using var line = new Mat(input, box);
@@ -258,6 +266,17 @@ public sealed class PaddleOcrProvider(AppPaths paths, ILogger<PaddleOcrProvider>
             gaps.Add((start, x));
         }
 
+        if (first >= 0 && LetterSpacedWords(letters, gaps, first, last, box.Width) is { } spaced)
+        {
+            logger.LogDebug("Line \"{Text}\" is letter-spaced; words from the gaps: {Words}", text, string.Join(" | ", spaced.Select(w => w.Text)));
+            return spaced.Select(w => (w.Text, box.Left + w.Left, box.Left + w.Right)).ToList();
+        }
+
+        logger.LogDebug("Line \"{Text}\": {Runs} ink runs for {Letters} letters, box {Box}; using the recogniser's spaces",
+            text, first < 0 ? 0 : gaps.Count + 1, letters.Length, box);
+        if (words.Length <= 1)
+            return [(text.Trim(), box.Left, box.Right)];
+
         if (gaps.Count < words.Length - 1)
         {
             logger.LogDebug("Line \"{Text}\": {Gaps} gaps for {Words} words; using one box for the line",
@@ -277,6 +296,69 @@ public sealed class PaddleOcrProvider(AppPaths paths, ILogger<PaddleOcrProvider>
         }
 
         return spans;
+    }
+
+    /// <summary>
+    /// Letter-spaced text (letterheads, headings): every letter is its own ink run with clear space around it.
+    /// The recogniser's spaces are unreliable there: it drops the word break ("TERIMAKASIH") or puts a space
+    /// between every letter ("T E R I M A"), and phrase search fails either way. When the ink runs match the
+    /// letters one to one, the words come from the gaps instead: a gap clearly wider than the typical letter
+    /// gap is a word break. Null when the line isn't letter-spaced or the runs don't match the letters.
+    /// </summary>
+    private static List<(string Text, int Left, int Right)>? LetterSpacedWords(
+        string letters, List<(int Start, int End)> gaps, int first, int last, int width)
+    {
+        if (letters.Length < LetterSpacedMinLetters || gaps.Count + 1 < letters.Length)
+            return null;
+
+        var runs = new List<(int Left, int Right)>(gaps.Count + 1);
+        var left = first;
+        foreach (var gap in gaps)
+        {
+            runs.Add((left, gap.Start));
+            left = gap.End;
+        }
+
+        runs.Add((left, last + 1));
+        gaps = [.. gaps];
+
+        // The detector splits widely spaced words into separate boxes that can clip a letter of the neighbouring
+        // box; that letter is cut by this box's edge. One such extra run is dropped.
+        if (runs.Count == letters.Length + 1 && runs[0].Left == 0)
+        {
+            runs.RemoveAt(0);
+            gaps.RemoveAt(0);
+        }
+        else if (runs.Count == letters.Length + 1 && runs[^1].Right == width)
+        {
+            runs.RemoveAt(runs.Count - 1);
+            gaps.RemoveAt(gaps.Count - 1);
+        }
+
+        if (runs.Count != letters.Length)
+            return null;
+
+        var letterGap = Median(gaps.Select(g => g.End - g.Start));
+        if (letterGap < LetterSpacedMinGap * Median(runs.Select(r => r.Right - r.Left)))
+            return null; // ordinary spacing: the recogniser's spaces are fine
+
+        var words = new List<(string, int, int)>();
+        var start = 0;
+        for (var i = 0; i < letters.Length; i++)
+        {
+            if (i < gaps.Count && gaps[i].End - gaps[i].Start < LetterSpacedWordGap * letterGap)
+                continue;
+            words.Add((letters[start..(i + 1)], runs[start].Left, runs[i].Right));
+            start = i + 1;
+        }
+
+        return words;
+
+        static double Median(IEnumerable<int> values)
+        {
+            var sorted = values.Order().ToArray();
+            return sorted.Length % 2 == 1 ? sorted[sorted.Length / 2] : (sorted[sorted.Length / 2 - 1] + sorted[sorted.Length / 2]) / 2.0;
+        }
     }
 
     /// <summary>

@@ -1,6 +1,6 @@
 # iProfiler Desktop — Rebuild Plan, Milestones 0–1 — 2026-10-28
 
-## STATUS: In Progress: M0 done (0.2–0.6 ✅, M0 gate = team-lead review pending; 0.1 office part done); 1.2 OCR ✅, 1.3 barcodes/QR/patch ✅, 1.4 deskew/blank/orientation ✅; next: 1.5 (then 1.1 with the AD7100, 1.6)
+## STATUS: In Progress: M0 done (0.2–0.6 ✅, M0 gate = team-lead review pending; 0.1 office part done); 1.2 OCR ✅, 1.3 barcodes/QR/patch ✅, 1.4 deskew/blank/orientation ✅, 1.5 SQLite + PDF-OCR/TIFF ✅ (⚠ PDFsharp licence, R12); next: 1.1 with the AD7100, then 1.6
 
 Execution plan for **iProfiler_Desktop_Rebuild_Plan.docx** (28 Aug 2026): a greenfield
 .NET / WPF rebuild of the legacy iProfiler ScanStation (WinForms + GdPicture). This is a **new
@@ -378,6 +378,39 @@ provider classes (those are kept). No real UI yet.
 3. `LibTiffAssembler : ITiffAssembler`: multi-page TIFF.
 
 **Verify:** the PDF opens in a normal reader and Ctrl+F finds 3 OCR'd words in the right spot; the multi-page TIFF opens with all pages in order; the DB file contains only metadata.
+
+**Result (2026-10-28): ✅** (details: `docs/spike-report.md`)
+- **SQLite:** `IProfiler.Data` has `CaptureDbContext` + `InitialCreate` migration + `EfBatchRepository` (behind Core
+  `IBatchRepository`), registered in `AppHost`. **Review follow-up:** `Page.DeskewAngle`, `Rotation` (0/90/180/270),
+  `Dpi` and `Crop` are persisted. The spike stores 4 analysed pages, reads them back through a new context, and exports
+  only from the stored values (rotation 180, deskew 1.50/0.05/0.05/0.50, crop as 4 columns).
+  - **DB = metadata only:** 48 KB, no BLOB columns, 0 BLOB values, 0 image signatures in the file.
+- **Export applies crop + deskew + rotation via `RenderForExportAsync`:** it now returns an `ExportGeometry` (Core,
+  original ↔ export pixels, within 1 px of the OpenCV render for 12 rotation/deskew combinations). The PDF text layer
+  maps OCR boxes through it. **Review follow-up:** real DPI from `Page.Dpi`, else the TIFF tag (LibTiff), else the A4
+  estimate. 200 dpi grey page → A4 595 × 842 pt; also used for the white-ratio and patch-code sizes.
+- **PDF-OCR** (`PdfSharpAssembler`): invisible text (render mode 3), each word stretched to its box, with a stretched
+  space between words. **Review follow-up, ink-gap word boxes:** checked in **MuPDF and PDFium (Chrome/Edge engine)**
+  against generated pages with known word positions (skewed 1.5°, cropped, upside-down 200 dpi).
+  - **24/24 phrase searches pass in both readers.** They include "SIMEN UTARA", "SIMEN UTARA SDN BHD" (0.35 em letter
+    spacing), "TERIMA KASIH" (0.8 em), the mixed 30 pt/11 pt line "TOTAL RM 12,345.60", "INV-2026-10457" and
+    "Tarikh: 28/10/2026". Highlight centres are 0.2–1.9 pt from the true spot.
+  - **Words: 119/120** in both readers. The miss is a lone "x", in the right place but its highlight is 3.06× its ink height.
+  - Baseline before fixes was 19/24. The fixes:
+    - (a) Letter-spaced lines get their words from the ink gaps, because Paddle reads "TERIMAKASIH" / "T E R I M A" / "K ASIH".
+    - (b) OCR runs on the deskewed/upright render, with boxes mapped back to original pixels (`OcrResult.MapBoxes`).
+      On the skewed original, word boxes were ~2× too tall.
+- **Multi-page TIFF** (`LibTiffAssembler`): 4 pages in order, G4 1-bit for bilevel and LZW for grey, real DPI tags. A
+  page with nothing applied is pixel-identical to its original.
+- **Originals:** SHA-256 unchanged for all 4. Timings for 4 pages: PDF 1.45 s, TIFF 1.15 s; OCR 4.0–4.5 s per page.
+- Tests: **131/131**, 3 runs in a row (+36: geometry 25, SQLite 4, assemblers 4, word boxes 2, PDFsharp licence pin 1).
+- ⚠ **Findings:**
+  - **PDFsharp 6.5.0 (Oct 2026) is AGPL-3.0 with a licence check.** Pinned to **6.2.4, the last MIT release**; a test
+    blocks upgrades. The PDF library is a team-lead decision before M4 (R12, R15).
+  - **Two PaddleOCR engines loading at once in one process crash inside Paddle**, so the singleton is mandatory (R16).
+  - PDF pages are embedded as PNG (B/W ≈ 50 KB per page; colour will be big: M4).
+  - JPEG/PNG DPI is still estimated.
+  - Startup migration comes in M2, with an installer re-test.
 
 ### Task 1.6: End-to-end run + spike report → go/no-go gate
 

@@ -23,6 +23,12 @@ public sealed class Page
     /// </summary>
     public double? DeskewAngle { get; set; }
 
+    /// <summary>
+    /// Resolution of the original image in dots per inch (from the scan request, or the image's resolution
+    /// tag on import); null = not recorded, so export reads the image's own tag and estimates only as a last resort.
+    /// </summary>
+    public int? Dpi { get; set; }
+
     /// <summary>Crop rectangle in original-image pixels; null means the whole page.</summary>
     public PixelRect? Crop { get; set; }
 

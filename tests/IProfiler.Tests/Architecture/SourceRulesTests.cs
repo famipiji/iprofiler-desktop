@@ -40,6 +40,15 @@ public partial class SourceRulesTests
         Assert.DoesNotMatch(@"Include=""[^""]*\.Models\.Online", props);
     }
 
+    [Fact]
+    public void Pdfsharp_stays_on_its_last_mit_release()
+    {
+        // PDFsharp 6.5.0 moved to AGPL-3.0 with a licence check, which a closed-source product can't ship.
+        var props = File.ReadAllText(Path.Combine(RepoRoot.Path, "Directory.Packages.props"));
+
+        Assert.Matches(@"Include=""PDFsharp"" Version=""6\.[0-2]\.\d+""", props);
+    }
+
     [GeneratedRegex(@"Environment\.CurrentDirectory|Directory\.(Get|Set)CurrentDirectory")]
     private static partial Regex CurrentDirectory();
 

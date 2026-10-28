@@ -33,6 +33,9 @@ public sealed class AppPaths
 
     public string Database => Path.Combine(Data, "iprofiler.db");
 
+    /// <summary>Short-lived working files (e.g. pages rendered for export); safe to delete when the app is closed.</summary>
+    public string Temp => Path.Combine(Data, "temp");
+
     /// <summary>Plain-text log for failures that happen before Serilog is running.</summary>
     public string StartupErrorLog => Path.Combine(Data, "startup-error.log");
 }

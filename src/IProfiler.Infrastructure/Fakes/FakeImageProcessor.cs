@@ -12,9 +12,10 @@ public sealed class FakeImageProcessor(ILogger<FakeImageProcessor> logger) : IIm
     public Task<double> GetWhiteRatioAsync(string imagePath, CancellationToken cancellationToken = default) =>
         Task.FromResult(FakeBatch.Find(imagePath)?.WhiteRatio ?? 0.85);
 
-    public Task RenderForExportAsync(Page page, string outputPath, CancellationToken cancellationToken = default)
+    /// <summary>Writes nothing; reports an A4 page at 300 dpi.</summary>
+    public Task<ExportGeometry> RenderForExportAsync(Page page, string outputPath, CancellationToken cancellationToken = default)
     {
         logger.LogInformation("Fake render of {ImagePath} to {OutputPath} skipped", page.ImagePath, outputPath);
-        return Task.CompletedTask;
+        return Task.FromResult(new ExportGeometry(page, 2480, 3508));
     }
 }

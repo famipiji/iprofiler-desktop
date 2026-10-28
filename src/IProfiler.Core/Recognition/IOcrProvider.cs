@@ -27,6 +27,14 @@ public sealed record OcrResult(IReadOnlyList<OcrLine> Lines)
     public static OcrResult Empty { get; } = new([]);
 
     public string Text => string.Join(Environment.NewLine, Lines.Select(l => l.Text));
+
+    /// <summary>
+    /// The same text with every line and word box passed through <paramref name="map"/>, e.g.
+    /// <c>ExportGeometry.ToOriginal</c> for OCR read from an export render.
+    /// </summary>
+    public OcrResult MapBoxes(Func<PixelRect, PixelRect> map) => new(Lines
+        .Select(l => l with { Box = map(l.Box), Words = l.Words.Select(w => w with { Box = map(w.Box) }).ToList() })
+        .ToList());
 }
 
 /// <param name="Words">The engine's own word boxes (used for searchable-PDF text layers and highlights).</param>

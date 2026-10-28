@@ -147,3 +147,93 @@ signing). Pending a manual run, as for Task 0.5.
 - `Page.DeskewAngle` needs a column in the Task 1.5 EF model.
 - The image-processor tests use OpenCvSharp directly to compare exported pixels. The layering rule (third-party
   imaging only in Infrastructure) is enforced for the `src/` projects; the test project is outside it.
+
+## Task 1.5: SQLite + PDF-OCR / multi-page TIFF export, 2026-10-28
+
+**Setup**
+- **SQLite (EF Core 10, `IProfiler.Data`):** `CaptureDbContext` with `Batch → Document → Page` and the `InitialCreate`
+  migration. `EfBatchRepository : IBatchRepository` (Core) uses one short-lived context per call. Stored per page:
+  `ImagePath`, `Rotation` (degrees: 0/90/180/270), `DeskewAngle`, `Dpi`, `Crop_X/Y/Width/Height` (complex type), `Order`,
+  `PatchCode`. **No image data**: the schema has no BLOB column. `AddCaptureDatabase(paths)` is registered in `AppHost`;
+  `dotnet-ef` is a repo-local tool (`dotnet tool restore`). A test fails if the model changes without a migration.
+- **One mapping for export:** `ExportGeometry` (Core) maps original pixels ↔ export pixels for crop → deskew → quarter
+  turn. `IImageProcessor.RenderForExportAsync` now returns the geometry it applied, so overlays use the same maths as
+  the pixels (tested against the OpenCV render for all 4 rotations × 3 deskew angles, to within 1 px). It has an inverse
+  for the M2 viewer's crop handles.
+- **Real DPI (review follow-up):** `Page.Dpi` (from the scan request) if set, else the TIFF's `XResolution` tag via
+  LibTiff, else the old A4-width estimate (JPEG/PNG for now). Used by the PDF page size, the TIFF tags, the white-ratio
+  speck size and the patch-code bar sizes.
+- **`PdfSharpAssembler`** (PDFsharp 6.2.4, MIT): each page rendered through `RenderForExportAsync` to a PNG and placed
+  at its real size (300 dpi A4 → 595 × 842 pt). OCR words go into a separate content stream with **text render mode 3**
+  (invisible). Each word is stretched to its box (glyph cell from ascent to descent = box height), and a stretched space
+  fills the gap to the next word so readers get real spaces. PDFsharp has no render-mode API, so `3 Tr` is inserted
+  after each `BT` of that stream.
+- **`LibTiffAssembler`** (LibTiff.NET 2.4.660, BSD): each page rendered to a single-page TIFF and copied in. Bilevel →
+  1-bit **CCITT G4**, grey/colour → LZW with predictor. Every page is tagged with its DPI, `PageNumber` and `SubFileType=Page`.
+- **Samples:** `tools/make-pdf-samples.py` generates an A4 page with known word positions:
+  - a letterhead with wide letter spacing, "SIMEN UTARA SDN BHD" (0.35 em)
+  - very wide spacing, "TERIMA KASIH" (0.8 em, so letter gaps are half a word gap)
+  - "TOTAL" at 30 pt with "RM 12,345.60" at 11 pt on the same line
+  - an address, invoice number, date and item line
+
+  It comes in three variants: upright G4 300 dpi; skewed 1.5°; upside down as 8-bit grey with a 200 dpi tag.
+- **Spike:** `IProfiler.Spike export <TestData> <out>` analyses 4 pages (deskew + orientation), stores the batch, reads it
+  back through a new context and exports from the **stored** metadata only. **Checker:**
+  `tools/check-searchable-pdf.py <out>/manifest.json` searches 8 phrases + all 40 words per page in **two real readers**,
+  MuPDF and **PDFium** (the engine in Chrome/Edge). A hit passes if it covers the true words horizontally (≥ 0.8 overlap,
+  or both ends within 1.5 pt), the true text's centre line is inside it, and it is ≤ 3× the ink height. Highlights span
+  the font's ascent to descent, so they are taller than the tight ink boxes of the truth.
+
+**Results** (dev PC, Release, `export4` run)
+
+| Page (stored metadata) | PDF size | Phrases (MuPDF + PDFium) | Words MuPDF / PDFium | Centre offset |
+|---|---|---|---|---|
+| skewed 1.5° G4, deskew **1.50** | 595.4 × 841.7 pt | **8/8** | 40/40 / 40/40 | 0.2–1.6 pt |
+| upright G4, crop (150,200,2300,3200), deskew 0.05 | 552.0 × 768.0 pt | **8/8** | 40/40 / 40/40 | 0.2–1.9 pt |
+| upside-down grey **200 dpi**, **Rotate180** | 595.4 × 841.7 pt | **8/8** | 39/40 / 39/40 | 0.2–1.9 pt |
+| delivery note G4, deskew 0.50 | 595.2 × 841.9 pt | (no truth) | — | — |
+
+- **24/24 phrase searches pass in both readers**, including "SIMEN UTARA", "SIMEN UTARA SDN BHD", "TERIMA KASIH" and the
+  mixed-size "TOTAL RM 12,345.60". The one word miss is the lone **"x"** on the 200 dpi page. It is in the right place
+  (0.94 overlap, 1.3 pt off), but its highlight is 3.06× its x-height ink, just over the limit. PDFium's extracted text
+  reads like the page: `No. Invois: INV-2026-10457 Tarikh: 28/10/2026`, `TOTAL RM 12,345.60`, `TERIMA KASIH`.
+- **Invisible:** every text span on every page is render mode 3 (MuPDF texttrace type 3). A PDFium render of page 1
+  shows the straightened page with no visible text overlay.
+- **Multi-page TIFF:** 4 pages in order: 2481×3507 G4 300 dpi, 2300×3200 G4 300 dpi (cropped), 1654×2338 grey LZW
+  200 dpi, 2480×3508 G4 300 dpi. A page exported with nothing applied is pixel-identical to its original.
+- **DB holds only metadata:** 48 KB file for 4 pages; tables `Batches`, `Documents`, `Pages` (+ EF history); **0 BLOB
+  values, 0 image signatures** (TIFF/PNG/JPEG magic) in the file. Stored values: rotation 180 on the upside-down page,
+  deskew 1.5 / 0.05 / 0.05 / 0.5, the crop as 4 columns. A unit test keeps a 50-page batch under 128 KB.
+- **Originals unchanged:** SHA-256 of all 4 source files identical after analysis + OCR + both exports.
+- **Timings:** analysis 11.4 s for 4 pages (orientation 2.4–3.3 s + skew 0.13–0.18 s each); SQLite 1.9 s, which is
+  first-call cost (migration + EF model build); OCR 4.0–4.5 s per page (render + OCR of the render); **PDF 1.45 s and
+  TIFF 1.15 s for 4 pages**. Output: PDF 210 KB, TIFF 192 KB.
+
+**What failed first, and the fixes** (same pages, baseline run → final run)
+
+| Problem (baseline) | Cause | Fix | After |
+|---|---|---|---|
+| "TERIMA KASIH" not found on any page (0/3 in both readers) | Paddle's English recogniser mangles wide letter spacing: it reads `TERIMAKASIH` (word break lost), `T E R I M A` + `K A S I H` (a space between every letter), or `K ASIH` | Ink-gap word boxes now handle letter-spaced lines. When the ink runs match the letters one to one and the typical letter gap is ≥ 0.35 of a letter's width, words come from the gaps: a gap ≥ 1.6× the typical letter gap is a word break. A clipped neighbour letter at the box edge is dropped. Normal lines keep the recogniser's spaces. | all three variants → `TERIMA` + `KASIH`; 3/3 found |
+| Skewed page: 2 more phrases fail, highlights 3.4–3.6× too tall | OCR of the **skewed original**: line boxes are axis-aligned bounds of tilted lines, so each word box is ~2× too tall | OCR the page **as exported** (cropped, deskewed, upright) and map the boxes back to original pixels (`OcrResult.MapBoxes(geometry.ToOriginal)`). This also makes upside-down pages readable. | 8/8, heights 1.3–1.8× (font ascent-to-descent vs ink) |
+| Crashes in Paddle (`op_info_impl.cc:37`) when 2 OCR test classes ran in parallel | **Two `PaddleOcrProvider` engines loading at once in one process** crash inside Paddle | Tests share one engine (xUnit collection). The app already registers a singleton, which is now a hard requirement (R16). | 131/131, 3 runs in a row |
+
+Overall: baseline **19/24** phrase checks → **24/24**.
+
+**Findings / follow-ups**
+- ⚠ **PDFsharp went AGPL.** 6.5.0 (14 Oct 2026) is AGPL-3.0 with a licence-key check (`PdfSharpLicenseException`
+  without a key). **6.2.4 (Jan 2026) is the last MIT release.** It is pinned, and a test fails on any 6.3+ version.
+  MIT 6.2.4 gets no more fixes, so the PDF library is now a **team-lead decision before M4** (R12): stay on 6.2.4,
+  QuestPDF (licence check), or PdfPig (Apache-2.0) / own PDF writer for image + text-layer output. PDFsharp 6.2.4 also
+  asks for `System.Security.Cryptography.Pkcs` 8.0.1 (advisories), pinned to 10.0.14.
+- **Where OCR runs (M2/M3 design):** for text layers and highlights, OCR the deskewed/upright render, not the original,
+  and store the boxes in original pixels (`MapBoxes`). They then stay valid if the user changes the crop later. A user
+  rotation change after OCR breaks the "text reads upright in the export" assumption, so re-OCR or re-map then.
+- **Image size in the PDF:** pages go in as PNG (lossless; bilevel pages as 8-bit grey Flate). Fine for B/W (≈ 50 KB per
+  A4 page here), but colour 300 dpi pages will be large. M4: CCITT G4 for bilevel and JPEG (quality setting) for colour
+  photos, which needs a PDF writer that accepts pre-encoded images.
+- **Text-layer font:** Arial from Windows fonts (`UseWindowsFontsUnderWindows`), subset-embedded, Unicode ToUnicode
+  map. Only its metrics matter.
+- **"x"-height words:** highlights span the whole glyph cell, so one-letter lowercase words look tall. That is cosmetic.
+- **JPEG/PNG DPI** is still estimated from the A4 width (JFIF/pHYs not read yet); TIFF is what scanners produce.
+- **Startup migration:** `MigrateCaptureDatabaseAsync` isn't called at app start yet (nothing uses the DB). Add it in M2
+  and re-test the installer in Sandbox: `e_sqlite3.dll` ships in the publish output.

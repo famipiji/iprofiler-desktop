@@ -11,6 +11,9 @@ public interface IImageProcessor
     /// <summary>Fraction of white pixels on the page, 0..1 (1 = completely white).</summary>
     Task<double> GetWhiteRatioAsync(string imagePath, CancellationToken cancellationToken = default);
 
-    /// <summary>Writes a copy of the page with its rotation and crop applied to <paramref name="outputPath"/>.</summary>
-    Task RenderForExportAsync(Page page, string outputPath, CancellationToken cancellationToken = default);
+    /// <summary>
+    /// Writes a copy of the page with its crop, deskew and rotation applied to <paramref name="outputPath"/> (format
+    /// from the extension). Returns the mapping it applied, so overlays such as OCR text land on the same pixels.
+    /// </summary>
+    Task<ExportGeometry> RenderForExportAsync(Page page, string outputPath, CancellationToken cancellationToken = default);
 }
