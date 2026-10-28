@@ -320,6 +320,18 @@ provider classes (those are kept). No real UI yet.
 - Tests: **74/74** (+15: page read, 3 region reads, empty/outside region, 6 patch sheets, 2 non-patch pages, OCR on G4).
 - Finding: ZXing's 1D boxes are the scan line (1 px high); grow them in M3 if whole-symbol highlights are needed.
 
+
+- Review (2026-10-28): ✅ approved. Follow-ups:
+  - **Patch-code test is circular:** the sample sheets were generated from the same bar table the detector uses. In
+    **Task 1.1**, print an official Kodak/Kodak Alaris patch sheet (Patch 1, 2, 3, T at least), scan it on the AD7100,
+    and run `OpenCvPatchCodeDetector` on the result, alongside the scanner's own hardware detection.
+  - **Where software detection plugs in (M3):** separation reads `Page.PatchCode`. At scan/import time fill it from the
+    scanner (hardware) or else from `IPatchCodeDetector`, and record which source it came from. Only run the software
+    check after orientation is known (Task 1.4); otherwise restrict to Patch 2/4 (symmetric).
+  - **DPI guess from page width** only holds for A4/Letter. Use the real DPI (TIFF tag via LibTiff in 1.5, or
+    `ScanRequest.Dpi` from the scanner) when it's available.
+  - Real-scan check of ZXing (noise, low contrast, small Code39) happens in 1.1/1.6.
+
 ### Task 1.4: Image ops: deskew, blank page, rotation as metadata
 
 1. `OpenCvImageProcessor : IImageProcessor`:
