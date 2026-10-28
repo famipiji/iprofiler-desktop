@@ -15,12 +15,15 @@
   <ItemGroup Label="Data">
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.14" />
   </ItemGroup>
-  <ItemGroup Label="OCR and imaging (IProfiler.Infrastructure only)">
+  <ItemGroup Label="OCR, barcode and imaging (IProfiler.Infrastructure only)">
     <PackageVersion Include="Sdcb.PaddleOCR" Version="3.3.1" />
     <PackageVersion Include="Sdcb.PaddleInference.runtime.win64.mkl" Version="3.3.1.70" />
     <!-- Sdcb.PaddleOCR 3.3.1 is built against OpenCvSharp4 4.11.0.20250507; keep the managed and native packages on that version. -->
     <PackageVersion Include="OpenCvSharp4" Version="4.11.0.20250507" />
     <PackageVersion Include="OpenCvSharp4.runtime.win" Version="4.11.0.20250507" />
+    <!-- 0.16.11 is the last OpenCV binding built against OpenCvSharp4 4.11 (0.16.12+ needs 4.13). -->
+    <PackageVersion Include="ZXing.Net" Version="0.16.11" />
+    <PackageVersion Include="ZXing.Net.Bindings.OpenCV.V4" Version="0.16.11" />
   </ItemGroup>
   <ItemGroup Label="Tests">
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.11.0" />

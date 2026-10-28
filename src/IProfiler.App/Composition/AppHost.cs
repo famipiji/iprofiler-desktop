@@ -70,6 +70,7 @@ public static class AppHost
         services.AddSingleton<IImportProvider, FakeImportProvider>();
         services.AddSingleton<IOcrProvider, FakeOcrProvider>();
         services.AddSingleton<IBarcodeProvider, FakeBarcodeProvider>();
+        services.AddSingleton<IPatchCodeDetector, FakePatchCodeDetector>();
         services.AddSingleton<IImageProcessor, FakeImageProcessor>();
         services.AddSingleton<IPdfAssembler, FakePdfAssembler>();
         services.AddSingleton<ITiffAssembler, FakeTiffAssembler>();

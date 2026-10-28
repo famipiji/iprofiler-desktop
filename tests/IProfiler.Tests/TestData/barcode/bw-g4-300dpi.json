@@ -1,0 +1,42 @@
+{
+  "barcodes": [
+    {
+      "symbology": "Code39",
+      "text": "SEP-0001",
+      "region": [
+        171,
+        743,
+        637,
+        265
+      ]
+    },
+    {
+      "symbology": "Code128",
+      "text": "DN-2026-55120",
+      "region": [
+        174,
+        1142,
+        789,
+        266
+      ]
+    },
+    {
+      "symbology": "QrCode",
+      "text": "IPROFILER|DOC=10457|SITE=PJ",
+      "region": [
+        1620,
+        673,
+        372,
+        372
+      ]
+    }
+  ],
+  "words": [
+    "HARBOUR",
+    "DELIVERY",
+    "DN-2026-55120",
+    "03/11/2026",
+    "Meridian",
+    "Received"
+  ]
+}

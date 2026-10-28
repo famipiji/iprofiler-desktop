@@ -18,3 +18,4 @@ One line per task: date, task, result, commit.
 | 2026-10-28 | Task 0.1 (office part): AD7100 + FB6380E have 32/64-bit TWAIN; 0 scanners without 64-bit driver; AD7100 = Task 1.1 test scanner. Client sites + legacy samples open | 🟡 | — |
 | 2026-10-28 | Task 0.1 remainder deferred; M1 reordered: 1.2 → 1.3 → 1.4 → 1.5 → 1.1 (needs AD7100) → 1.6 | ⏸ | — |
 | 2026-10-28 | Task 1.2 PaddleOCR provider (PP-OCRv5 mobile, 12.3 MB models in repo): page OCR 6/6 words, 2.8–3.8 s/page warm; region field exact (~1 s); 0 network endpoints on host; Sandbox network-off run blocked by App Control (unsigned exe), pending manual; 59/59 tests | 🟡 | see git log |
+| 2026-10-28 | Task 1.3 ZXing barcode/QR provider + OpenCV patch-code check; 300 dpi G4 TIFF: barcodes 3/3 (0.57 s page, ~25 ms region), PaddleOCR 6/6 words; patch sheets 6/6 (upside-down 1↔6, 3↔T risk recorded); AD7100 hardware patch codes → Task 1.1; 74/74 tests | ✅ | see git log |

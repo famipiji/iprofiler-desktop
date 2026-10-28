@@ -14,6 +14,8 @@
     <PackageReference Include="Sdcb.PaddleInference.runtime.win64.mkl" />
     <PackageReference Include="OpenCvSharp4" />
     <PackageReference Include="OpenCvSharp4.runtime.win" />
+    <PackageReference Include="ZXing.Net" />
+    <PackageReference Include="ZXing.Net.Bindings.OpenCV.V4" />
   </ItemGroup>
   <ItemGroup>
     <!-- OCR models ship with the app (offline, no runtime download). They flow to every project that

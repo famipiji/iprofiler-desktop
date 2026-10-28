@@ -2,6 +2,7 @@ using System.Diagnostics;
 using IProfiler.Core;
 using IProfiler.Core.Domain;
 using IProfiler.Core.Recognition;
+using IProfiler.Infrastructure.Imaging;
 using Microsoft.Extensions.Logging;
 using OpenCvSharp;
 using Sdcb.PaddleInference;
@@ -54,9 +55,9 @@ public sealed class PaddleOcrProvider(AppPaths paths, ILogger<PaddleOcrProvider>
     private OcrResult Recognize(string imagePath, PixelRect? region, CancellationToken cancellationToken)
     {
         var total = Stopwatch.StartNew();
-        using var page = Load(imagePath);
+        using var page = ImageFile.Load(imagePath, ImreadModes.Color);
 
-        var area = Clip(region ?? new PixelRect(0, 0, page.Width, page.Height), page.Width, page.Height);
+        var area = ImageFile.Clip(region ?? new PixelRect(0, 0, page.Width, page.Height), page.Width, page.Height);
         if (area.Width == 0 || area.Height == 0)
         {
             logger.LogWarning("OCR region {Region} lies outside {File} ({Width}x{Height}); nothing to read",
@@ -123,27 +124,10 @@ public sealed class PaddleOcrProvider(AppPaths paths, ILogger<PaddleOcrProvider>
         }
     }
 
-    private static Mat Load(string imagePath)
-    {
-        // ImDecode instead of ImRead: ImRead can't open non-ASCII paths on Windows.
-        var image = Cv2.ImDecode(File.ReadAllBytes(imagePath), ImreadModes.Color);
-        if (image.Empty())
-        {
-            image.Dispose();
-            throw new InvalidDataException($"Not an image OpenCV can read: {imagePath}");
-        }
-
-        return image;
-    }
-
     /// <summary>Crops the area (with a white margin for regions) and downscales it to <see cref="MaxLongSide"/>.</summary>
     private static Mat Prepare(Mat page, BoxMap map)
     {
-        var area = map.Area;
-        var pad = map.Padding;
-        using var crop = new Mat(page, new Rect(area.X, area.Y, area.Width, area.Height));
-        using var padded = new Mat();
-        Cv2.CopyMakeBorder(crop, padded, pad, pad, pad, pad, BorderTypes.Constant, Scalar.White);
+        using var padded = ImageFile.CropWithMargin(page, map.Area, map.Padding);
 
         map.Scale = Math.Min(1.0, (double)MaxLongSide / Math.Max(padded.Width, padded.Height));
         var result = new Mat();
@@ -241,15 +225,6 @@ public sealed class PaddleOcrProvider(AppPaths paths, ILogger<PaddleOcrProvider>
         return rows.SelectMany(r => r.OrderBy(l => l.Box.X)).ToList();
 
         static double CenterY(PixelRect b) => b.Y + b.Height / 2.0;
-    }
-
-    private static PixelRect Clip(PixelRect r, int width, int height)
-    {
-        var left = Math.Clamp(r.X, 0, width);
-        var top = Math.Clamp(r.Y, 0, height);
-        var right = Math.Clamp(r.X + r.Width, left, width);
-        var bottom = Math.Clamp(r.Y + r.Height, top, height);
-        return new PixelRect(left, top, right - left, bottom - top);
     }
 
     /// <summary>Maps boxes from the prepared (padded, downscaled) image back to original page pixels.</summary>

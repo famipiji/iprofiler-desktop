@@ -67,6 +67,20 @@ public class PaddleOcrProviderTests(PaddleOcrFixture fixture) : IClassFixture<Pa
     }
 
     [Fact]
+    public async Task Page_ocr_reads_a_bilevel_g4_tiff_at_300_dpi()
+    {
+        // Default scanner output: 1-bit CCITT G4. Thin B/W strokes must survive the 1600 px downscale.
+        var page = Path.Combine(AppContext.BaseDirectory, "TestData", "barcode", "bw-g4-300dpi.tif");
+        using var json = JsonDocument.Parse(File.ReadAllText(Path.ChangeExtension(page, ".json")));
+        var words = json.RootElement.GetProperty("words").EnumerateArray().Select(w => w.GetString()!).ToList();
+
+        var result = await fixture.Provider.RecognizePageAsync(page);
+
+        Assert.All(words, w => Assert.Contains(w, result.Text));
+        Assert.Contains("Ship to: Meridian Office Supplies, Petaling Jaya", result.Text);
+    }
+
+    [Fact]
     public async Task Page_ocr_keeps_reading_order_left_to_right()
     {
         var result = await fixture.Provider.RecognizePageAsync(PaddleOcrFixture.Invoice);

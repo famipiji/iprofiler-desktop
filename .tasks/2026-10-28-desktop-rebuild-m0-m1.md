@@ -1,6 +1,6 @@
 # iProfiler Desktop — Rebuild Plan, Milestones 0–1 — 2026-10-28
 
-## STATUS: In Progress: M0 done (0.2–0.6 ✅, M0 gate = team-lead review pending; 0.1 office part done); Task 1.2 OCR ✅ on the host, network-off Sandbox run pending (App Control blocks the unsigned exe); next: 1.3
+## STATUS: In Progress: M0 done (0.2–0.6 ✅, M0 gate = team-lead review pending; 0.1 office part done); 1.2 OCR ✅ (network-off Sandbox run moved to 1.6); 1.3 barcodes/QR/patch ✅ (AD7100 hardware patch codes → 1.1); next: 1.4
 
 Execution plan for **iProfiler_Desktop_Rebuild_Plan.docx** (28 Aug 2026): a greenfield
 .NET / WPF rebuild of the legacy iProfiler ScanStation (WinForms + GdPicture). This is a **new
@@ -311,6 +311,14 @@ provider classes (those are kept). No real UI yet.
 3. Patch codes: if Task 1.1 showed the scanner reports them, read them from the scan metadata; otherwise prototype the OpenCvSharp bar-pattern check on a sample patch sheet.
 
 **Verify:** a test page with one of each symbology decodes correctly; patch-code approach recorded in the spike report.
+
+**Result (2026-10-28): ✅** (details: `docs/spike-report.md`)
+- `ZXingBarcodeProvider` (ZXing.Net + OpenCV binding 0.16.11, which matches the OpenCvSharp 4.11 pin) and `OpenCvPatchCodeDetector` behind a new Core `IPatchCodeDetector` (`FakePatchCodeDetector` registered in `AppHost`). A shared `ImageFile` helper serves OCR and barcodes.
+- **Review follow-up, 1-bit G4 sample:** `tools/make-barcode-samples.py` (zxing-cpp writer) generates a **300 dpi CCITT G4 TIFF** with Code39, Code128 and QR. OpenCV decodes it; **barcodes 3/3** on the full page (0.57 s warm), and **region reads 3/3** with exactly one result each (20–29 ms). **PaddleOCR 6/6 words** on the same page (3.0 s warm).
+- **Patch codes:** the AD7100 isn't connected, so the software check was prototyped on generated G4 patch sheets: **6/6 codes** recognised; the delivery note and the text invoice give none; also correct at 200 dpi and on Letter paper. **Hardware patch-code detection on the AD7100 is still to be checked in Task 1.1.**
+- **Risk:** reading direction is fixed, so an upside-down sheet reads Patch 1 as Patch 6 and Patch 3 as Patch T (confirmed by probe). The software check needs the Task 1.4 orientation result; otherwise use Patch 2/4 or hardware detection.
+- Tests: **74/74** (+15: page read, 3 region reads, empty/outside region, 6 patch sheets, 2 non-patch pages, OCR on G4).
+- Finding: ZXing's 1D boxes are the scan line (1 px high); grow them in M3 if whole-symbol highlights are needed.
 
 ### Task 1.4: Image ops: deskew, blank page, rotation as metadata
 
