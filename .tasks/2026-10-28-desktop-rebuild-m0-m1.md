@@ -249,7 +249,15 @@ Verify is finished with SAC turned off inside the throwaway sandbox (or a Hyper-
 ## D. Milestone 1 — Architecture spike (proof, not production code)
 
 > **Run order changed (2026-10-28):** 1.2 → 1.3 → 1.4 → 1.5 → **1.1** → 1.6. No scanner is connected yet, so the
-> tasks that only need image files go first. 1.2–1.5 use sample scans: put a few real-world TIFF/JPG/PDF pages
+> tasks that only need image files go first.
+
+> **Update (2026-10-28): Task 1.1 deferred.** Blocked on (1) the AD7100 not being connected and (2) team-lead decision
+> **D8: scanning library**, either (a) NAPS2.Sdk 1.6.0 under LGPL-2.1 with the compliance steps in the spike report, or
+> (b) NTwain 3.7.6 (MIT) + our own 32-bit worker. **Task 1.6 runs in import mode**: pages come from files on disk via
+> `IImportProvider` (real scans in `samples/spike/` if available, else the generated TIFFs), not from the scanner.
+> The M1 gate becomes **conditional**: everything proven except scan acquisition. M2 may start with import + viewer +
+> explorer tree; scanning plugs in through `IScanProvider` when 1.1 is done. **Do 1.1 before M2's "Scan & import UI"
+> slice ships.** 1.2–1.5 use sample scans: put a few real-world TIFF/JPG/PDF pages
 > (invoice, form with a barcode, a skewed page, a blank page, a QR) in `samples/spike/`, or generate test images
 > in code where needed (barcodes, blank/skewed pages). **Task 1.1 needs the Avision AD7100 connected**; Task 0.1's
 > remaining parts (client-site list, legacy samples) can wait until before M5.
