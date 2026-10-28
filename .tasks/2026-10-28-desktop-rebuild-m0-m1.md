@@ -352,6 +352,25 @@ provider classes (those are kept). No real UI yet.
 - Tests: **95/95** (+21).
 - ⚠ **Finding:** a sparse page ("Page 2 of 2" only) scores 0.99979, so it counts as **blank**. M3 should use "white ratio ≥ threshold **and** no confident text line" (orientation/OCR already gives that). Other follow-ups: reuse the normal OCR pass for the upright score (M2/M3); 90°/270° not covered; crop-then-deskew order; DeskewAngle column in 1.5.
 
+
+- Review (2026-10-28): ✅ approved. Follow-ups:
+  - **Throughput vs the scanner (important for M2 design):** the AD7100 feeds ~100 ppm (≈0.6 s/page), but per-page analysis
+    is now orientation ~2.3 s + OCR ~3 s + barcodes ~0.6 s + skew/white ~0.2 s. Analysis can't keep up in real time.
+    M2 must **scan first, analyse in a background queue** (show pages immediately, fill metadata as it arrives), and only
+    run what the batch's settings need (e.g. no full OCR unless a profile/separation mode uses it).
+  - **Task 1.1: check the AD7100 driver's built-in image features** (auto-deskew, auto-rotate/orientation, blank-page
+    removal, patch codes). Where the scanner does them reliably, prefer hardware (no CPU cost) and keep the software
+    checks as fallback, the same pattern as patch codes. Record which features exist in `docs/scanner-inventory.md`.
+  - **Orientation reuse (M2/M3):** when a page gets full OCR anyway, take the upright score from that pass instead of a
+    separate detection run.
+  - **Blank = white ratio ≥ threshold AND no confident text line** (M3), so "Page 2 of 2" pages aren't dropped. Only
+    OCR the pages that already pass the white-ratio test (cheap).
+  - **Crop coordinates (M2 viewer):** the user draws crops on the displayed (deskewed + rotated) image, but crop is
+    stored in original pixels and applied first. The viewer's single coordinate-mapping implementation must invert
+    rotation and deskew.
+  - **1.5:** persist `DeskewAngle` (and the orientation scores, optional) in SQLite.
+  - Real scans (1.1/1.6): check `InkThreshold = 128` on coloured/grey paper and dark forms.
+
 ### Task 1.5: SQLite + PDF/TIFF output
 
 1. `IProfiler.Data`: EF Core SQLite with `Batch`, `Document`, `Page` (+ the EF migration). Metadata only, no image blobs (doc §3.7).
