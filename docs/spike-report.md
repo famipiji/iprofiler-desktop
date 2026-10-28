@@ -237,3 +237,46 @@ Overall: baseline **19/24** phrase checks → **24/24**.
 - **JPEG/PNG DPI** is still estimated from the A4 width (JFIF/pHYs not read yet); TIFF is what scanners produce.
 - **Startup migration:** `MigrateCaptureDatabaseAsync` isn't called at app start yet (nothing uses the DB). Add it in M2
   and re-test the installer in Sandbox: `e_sqlite3.dll` ships in the publish output.
+
+## Task 1.1: Scan acquisition (NAPS2.Sdk vs NTwain), 2026-10-28: ⏸ stopped after the licence check
+
+**Scanner:** the AD7100 was not connected (`USB\VID_0638&PID_33DC`, Present = False), so no scans, driver-feature
+check, patch-sheet comparison or real-scan analysis were run yet.
+
+**Licence check (step 1).** Read from the `LICENSE` / nuspec inside the exact nupkgs, not from release notes (R15):
+
+| Package | Version | Licence |
+|---|---|---|
+| **NAPS2.Sdk** | **1.6.0** (25 Oct 2026; also 1.5.0) | **LGPL-2.1-or-later** |
+| NAPS2.Images / NAPS2.Internals / NAPS2.Escl | 1.6.0 | **LGPL-2.1-or-later** |
+| NAPS2.NTwain | 1.0.1 | MIT |
+| NAPS2.Wia | 2.0.3 | MIT |
+| NAPS2.PdfSharp | 1.0.2 | MIT |
+| SharpZipLib | 1.4.2 | MIT |
+| GrpcDotNetNamedPipes | 3.1.0 | Apache-2.0 |
+| ZXing.Net / SixLabors.Fonts | 0.16.11 / 1.0.1 | Apache-2.0 |
+| NTwain (fallback) | 3.7.6 stable (net6.0-windows) / 4.0.0-beta.4 (net10.0) | MIT |
+
+LGPL-2.1 can normally ship in a closed-source product, but only with conditions (not legal advice; team lead / legal to
+confirm):
+- Use the NAPS2 assemblies (and its 32-bit worker exe) **unmodified, as separate replaceable files**. No single-file
+  publish, IL merging or trimming that folds them into our binaries. Our self-contained folder publish is fine.
+- Ship the LGPL text and NAPS2 copyright notice, plus the NAPS2 source for the exact version (or a written offer).
+- The **EULA must allow** users to modify/replace the LGPL part and reverse-engineer for debugging that (LGPL §6).
+  Check the current ScanStation EULA.
+- Any change to NAPS2 itself must be published under LGPL.
+
+**Options for the team lead:**
+- **(a) NAPS2.Sdk under LGPL:** least code. TWAIN + WIA + ready-made 32-bit worker (`SetUpWin32Worker()`).
+- **(b) NTwain 3.7.6 (MIT) or NAPS2's MIT fork NAPS2.NTwain:** no copyleft, but we build the 32-bit worker ourselves:
+  - worker exe
+  - IPC (e.g. GrpcDotNetNamedPipes, Apache-2.0)
+  - page/image transfer
+  - process lifecycle and crash handling
+  - WIA separately (NAPS2.Wia is MIT)
+
+  Both office Avision models have native 64-bit TWAIN drivers (Task 0.1), so the worker is insurance for client sites (R2).
+
+Next, once the scanner is connected and (a)/(b) is decided: steps 2–5 of Task 1.1 plus the review follow-ups (direct
+x64 vs worker, 300 dpi B/W + one grayscale run, AD7100 driver features, Kodak patch sheets hardware vs
+`OpenCvPatchCodeDetector`, OCR/barcode/skew/white/orientation on the real scans).

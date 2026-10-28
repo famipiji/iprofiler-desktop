@@ -1,6 +1,6 @@
 # iProfiler Desktop — Rebuild Plan, Milestones 0–1 — 2026-10-28
 
-## STATUS: In Progress: M0 done (0.2–0.6 ✅, M0 gate = team-lead review pending; 0.1 office part done); 1.2 OCR ✅, 1.3 barcodes/QR/patch ✅, 1.4 deskew/blank/orientation ✅, 1.5 SQLite + PDF-OCR/TIFF ✅ (⚠ PDFsharp licence, R12); next: 1.1 with the AD7100, then 1.6
+## STATUS: In Progress: M0 done (0.2–0.6 ✅, M0 gate = team-lead review pending; 0.1 office part done); 1.2 OCR ✅, 1.3 barcodes/QR/patch ✅, 1.4 deskew/blank/orientation ✅, 1.5 SQLite + PDF-OCR/TIFF ✅ (⚠ PDFsharp licence, R12); 1.1 ⏸ (AD7100 not connected; NAPS2.Sdk is LGPL-2.1, team-lead decision R3), then 1.6
 
 Execution plan for **iProfiler_Desktop_Rebuild_Plan.docx** (28 Aug 2026): a greenfield
 .NET / WPF rebuild of the legacy iProfiler ScanStation (WinForms + GdPicture). This is a **new
@@ -269,6 +269,18 @@ provider classes (those are kept). No real UI yet.
 5. Check whether the scanner reports **hardware patch codes** through TWAIN (A6).
 
 **Verify:** 3 TIFFs on disk from an x64 build; record (driver, direct vs worker, silent scan OK, patch codes reported yes/no) in `docs/spike-report.md`.
+
+**Result (2026-10-28): ⏸ stopped after step 1, two blockers** (details: `docs/spike-report.md`)
+- **AD7100 not connected:** Windows knows it (`USB\VID_0638&PID_33DC\B11430455A310011`) but Present = False; only
+  the Brother MFP (WIA/eSCL) is attached. No scan steps were run.
+- **Licence check (R3, R15: read from the exact nupkgs):** **NAPS2.Sdk 1.6.0** (published 25 Oct 2026, has net10.0) and
+  1.5.0 are **LGPL-2.1-or-later**, and so are NAPS2.Images / Internals / Escl 1.6.0. The rest of its graph is permissive:
+  NAPS2.NTwain 1.0.1, NAPS2.Wia 2.0.3, NAPS2.PdfSharp 1.0.2 and SharpZipLib 1.4.2 are MIT;
+  GrpcDotNetNamedPipes 3.1.0, ZXing.Net 0.16.11 and SixLabors.Fonts 1.0.1 are Apache-2.0. Fallback: **NTwain 3.7.6** is
+  MIT (net6.0-windows, published May 2026) and NTwain 4.0.0-beta.4 is MIT (net10.0, beta).
+- LGPL isn't clearly unsuitable, but it isn't "acceptable" without conditions (see the spike report), and section B
+  doesn't cover copyleft. **Team-lead decision needed:** (a) NAPS2.Sdk under LGPL with the compliance steps, or
+  (b) NTwain (MIT) and build the 32-bit worker ourselves. Neither was started.
 
 ### Task 1.2: OCR: PaddleOCR in-process, fully offline
 
