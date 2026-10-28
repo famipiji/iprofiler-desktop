@@ -1,6 +1,6 @@
 # iProfiler Desktop — Rebuild Plan, Milestones 0–1 — 2026-10-28
 
-## STATUS: In Progress: Task 0.3 done locally (GitHub repo + CI run pending); Task 0.1 deferred until before 1.1; next: Task 0.4
+## STATUS: In Progress: Tasks 0.2–0.3 done; Task 0.1 deferred until before 1.1; next: Task 0.4
 
 Execution plan for **iProfiler_Desktop_Rebuild_Plan.docx** (28 Aug 2026): a greenfield
 .NET / WPF rebuild of the legacy iProfiler ScanStation (WinForms + GdPicture). This is a **new
@@ -113,7 +113,7 @@ Also (D7): copy a set of **legacy ScanStation config files** from one real site 
 
 **Verify:** the solution builds; the tests pass; adding a dummy `using ZXing;` in `IProfiler.Application` makes a test fail (then remove it); CI is green.
 
-**Result (2026-10-28): ✅ local / ⏳ GitHub + CI pending**
+**Result (2026-10-28): ✅**
 - `global.json` pins SDK `10.0.403`, `rollForward: latestFeature`; `dotnet --version` → 10.0.403.
 - `IProfiler.Desktop.sln` (classic `.sln` format) with 6 projects: `src/IProfiler.{Core,Application,Infrastructure,Data,App}` + `tests/IProfiler.Tests`. Every solution platform maps to x64.
 - `Directory.Build.props` (Nullable, TreatWarningsAsErrors, PlatformTarget x64) + `Directory.Packages.props` (central versions: EF Core Sqlite 10.0.14, xunit 2.9.3, xunit.runner.visualstudio 3.1.4, Microsoft.NET.Test.Sdk 18.11.0, NetArchTest.Rules 1.3.2). No imaging/OCR/scan packages yet; they come in with their M1 tasks (NAPS2 only after its licence check).
@@ -123,7 +123,7 @@ Also (D7): copy a set of **legacy ScanStation config files** from one real site 
 - Violation check: ZXing.Net 0.16.11 added to Application temporarily. With only `using ZXing;` → **1 failed** (package rule; a bare `using` leaves nothing in IL, so the IL rule alone can't see it). With a type that uses `BarcodeFormat` → **2 failed** (IL rule names `IProfiler.Application.ArchViolationProbe`, plus the package rule). Reverted → 15/15 pass.
 - Fixed along the way: `App.xaml.cs` now derives from `System.Windows.Application`. Without that, as soon as `IProfiler.Application` contains a type, `Application` inside `IProfiler.App` resolves to that namespace (CS0118).
 - `.github/workflows/ci.yml`: `windows-latest`, setup-dotnet from `global.json`, restore → build Release → test (trx uploaded), on every push/PR. Its steps were run locally: pass.
-- ✅ Pushed: `main` at `ac1c710` is on `origin` (github.com/famipiji/iprofiler-desktop). **Still to confirm:** the first CI run is green (GitHub → Actions).
+- ✅ Pushed: `main` at `ac1c710` is on `origin` (github.com/famipiji/iprofiler-desktop). First CI run [#40623687968](https://github.com/famipiji/iprofiler-desktop/actions/runs/40623687968) on `ac1c710`: **success**, every step green (checkout, setup-dotnet, restore, build, test, upload), about 1.5 min.
 - Review (2026-10-28): approved. Follow-ups folded into Task 0.4: also restrict `Microsoft.EntityFrameworkCore` to `IProfiler.Data`, and `Serilog` sinks to `IProfiler.App`/`Infrastructure`.
 
 ### Task 0.4: Interfaces, domain model, logging, paths (no real providers yet)
