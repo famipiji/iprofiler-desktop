@@ -412,6 +412,19 @@ provider classes (those are kept). No real UI yet.
   - JPEG/PNG DPI is still estimated.
   - Startup migration comes in M2, with an installer re-test.
 
+
+- Review (2026-10-28): ✅ approved. Follow-ups:
+  - **PDFsharp licence (R12/R15):** the report says 6.5.0 moved to AGPL with a licence check; I couldn't confirm this
+    independently. The team lead should check pdfsharp.com / the NuGet licence before M4 and decide (stay on 6.2.4 MIT,
+    QuestPDF community licence, or another library). The pin + test that blocks upgrades is the right guard meanwhile.
+  - **Text-layer trick:** `MakeTextInvisible` patches `BT` → `BT 3 Tr` in PDFsharp's content stream. It works and is
+    tested in MuPDF + PDFium, but it depends on PDFsharp internals; keep the reader tests in CI and re-run them on any
+    PDFsharp change. Add Adobe Acrobat Reader to the manual check list in M4 (most clients use it).
+  - **M4:** colour pages as JPEG (not PNG) in PDFs; consider **PDF/A** output (common requirement for M-Files/archives).
+  - **M2:** `MigrateCaptureDatabaseAsync` at startup + installer re-test (upgrade path keeps the DB).
+  - EF maps Core domain classes directly (shadow FKs, no attributes in Core): fine. If Core types ever need EF-only
+    changes, add separate persistence entities instead of touching Core.
+
 ### Task 1.6: End-to-end run + spike report → go/no-go gate
 
 1. `spike/` console: scan 3 pages → OCR one field region → read one barcode → write rows to SQLite → assemble one PDF + one TIFF.
