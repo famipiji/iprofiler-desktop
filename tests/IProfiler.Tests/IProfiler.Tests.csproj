@@ -18,6 +18,9 @@
     <ProjectReference Include="..\..\src\IProfiler.App\IProfiler.App.csproj" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="TestData\**\*" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+  <ItemGroup>
     <Using Include="Xunit" />
   </ItemGroup>
 </Project>

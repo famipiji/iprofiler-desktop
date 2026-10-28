@@ -1,6 +1,6 @@
 # iProfiler Desktop — Rebuild Plan, Milestones 0–1 — 2026-10-28
 
-## STATUS: In Progress: Tasks 0.2–0.4 done; Task 0.5 built, Verify pending (manual Sandbox test); Task 0.1 deferred until before 1.1
+## STATUS: In Progress: M0 done (0.2–0.6 ✅, M0 gate = team-lead review pending; 0.1 office part done); Task 1.2 OCR ✅ on the host, network-off Sandbox run pending (App Control blocks the unsigned exe); next: 1.3
 
 Execution plan for **iProfiler_Desktop_Rebuild_Plan.docx** (28 Aug 2026): a greenfield
 .NET / WPF rebuild of the legacy iProfiler ScanStation (WinForms + GdPicture). This is a **new
@@ -279,6 +279,17 @@ provider classes (those are kept). No real UI yet.
 5. Region OCR: crop a rectangle from the page, then OCR it. This is the core of "FlyOCR".
 
 **Verify (network off):** full-page OCR of a scanned TIFF and a region OCR of one field both return correct text; log the time per page (expect roughly 1–5 s on CPU based on the Flask migration's numbers) and the model-files size; record both in the spike report.
+
+**Result (2026-10-28): 🟡 OCR ✅ (host, 0 network endpoints); ⏳ network-off Sandbox run blocked by App Control, pending manual run** (details: `docs/spike-report.md`)
+- `PaddleOcrProvider` (Sdcb.PaddleOCR 3.3.1, MKL runtime, OpenCvSharp 4.11.0.20250507). PP-OCRv5 mobile det + English rec are in the repo under `models/`, **12.3 MB** across 6 files, copied to `<install>\models\`. No online model package (a test enforces this). One lazily loaded engine behind a lock; downscale to 1600 px; confidence ≥ 0.5; region OCR with a white margin, dropping edge fragments.
+- Samples: `samples/spike/` was empty, so `tools/make-ocr-samples.py` generated a 300 dpi TIFF invoice (skew 0.6°, noise, watermark) and a 200 dpi JPEG letter.
+- **Full page:** invoice 29 lines, 6/6 expected words, **3.4–3.8 s** warm (5.7 s first call incl. 1.0 s model load); letter 9 lines, 6/6, **2.8 s**.
+- **Region OCR** of the invoice-number field: `INV-2026-10457` exact, 0.9–1.1 s.
+- **Offline:** the self-contained Release build ran on the host with a dead proxy and opened **0 TCP/UDP endpoints** (100 ms polling).
+  - In Windows Sandbox (`Networking Disable`; ping "General failure", no DNS) **App Control blocked the unsigned `IProfiler.Spike.exe`** ("Device Guard policy"). This is the same block as Task 0.5 (R1, code signing). I didn't try to get around it.
+  - **Manual step (user):** with the Sandbox set up as for your Task 0.5 test, open `C:\Users\Dell\AppData\Local\Temp\claude\C--Users-Dell-source-iprofiler-desktop\38683206-82e6-40f3-99cf-d39715cb35d0\scratchpad\offline\offline.wsb`. It runs `run.cmd`, which writes `results\report.json` (`"ok": true`, `"network": false` expected) and `console.txt`.
+- Tests: 59/59 (+8 OCR tests on a 150 dpi fixture: page text, reading order, word boxes, region, clipping, concurrency; +1 "no online model package").
+- Findings: Sdcb exposes **no character positions**, so word boxes come from ink gaps in the line (check against the searchable PDF in 1.5). Y-only sorting broke on skew, so lines are now grouped into rows. Publish is 458 MB uncompressed; trim `opencv_videoio_ffmpeg`, `onnxruntime` and `paddle2onnx` (~38 MB) in 1.6. Re-run on 5 real scans in 1.6.
 
 ### Task 1.3: Barcode + QR: ZXing.Net
 

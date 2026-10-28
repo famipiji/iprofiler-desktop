@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Milestone 1 throwaway console: drives the real Infrastructure providers against sample files.
+       Same rule as the App: no third-party imaging/OCR types here, only Core interfaces. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>false</SelfContained>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\IProfiler.Core\IProfiler.Core.csproj" />
+    <ProjectReference Include="..\..\src\IProfiler.Infrastructure\IProfiler.Infrastructure.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Logging.Console" />
+  </ItemGroup>
+</Project>

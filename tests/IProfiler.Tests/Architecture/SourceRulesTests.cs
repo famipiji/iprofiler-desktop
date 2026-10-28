@@ -30,6 +30,16 @@ public partial class SourceRulesTests
         Assert.True(offenders.Count == 0, "Empty catch blocks (log or rethrow): " + string.Join(", ", offenders));
     }
 
+    [Fact]
+    public void No_package_downloads_models_at_runtime()
+    {
+        // Rule 8 (offline): models ship as files under AppPaths.Models. Sdcb's "Online" model packages
+        // download from the internet on first use, so they must never be referenced.
+        var props = File.ReadAllText(Path.Combine(RepoRoot.Path, "Directory.Packages.props"));
+
+        Assert.DoesNotMatch(@"Include=""[^""]*\.Models\.Online", props);
+    }
+
     [GeneratedRegex(@"Environment\.CurrentDirectory|Directory\.(Get|Set)CurrentDirectory")]
     private static partial Regex CurrentDirectory();
 

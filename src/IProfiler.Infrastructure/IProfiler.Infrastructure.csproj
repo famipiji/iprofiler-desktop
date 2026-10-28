@@ -10,5 +10,14 @@
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+    <PackageReference Include="Sdcb.PaddleOCR" />
+    <PackageReference Include="Sdcb.PaddleInference.runtime.win64.mkl" />
+    <PackageReference Include="OpenCvSharp4" />
+    <PackageReference Include="OpenCvSharp4.runtime.win" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- OCR models ship with the app (offline, no runtime download). They flow to every project that
+         references Infrastructure and land in <output>\models\, which is AppPaths.Models. -->
+    <None Include="..\..\models\ppocrv5-mobile\**\*" LinkBase="models\ppocrv5-mobile" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>
