@@ -10,57 +10,107 @@ namespace IProfiler.Tests.Architecture;
 /// </summary>
 public class LayeringTests
 {
-    // Rule 1: third-party imaging/scan/OCR/PDF libraries may only be used in IProfiler.Infrastructure.
-    private static readonly string[] RestrictedLibraries =
-        ["NTwain", "NAPS2", "Sdcb", "OpenCvSharp", "ZXing", "PdfSharp", "QuestPDF", "BitMiracle", "Tesseract"];
-
+    private const string Core = "IProfiler.Core";
+    private const string Application = "IProfiler.Application";
     private const string Infrastructure = "IProfiler.Infrastructure";
+    private const string Data = "IProfiler.Data";
+    private const string App = "IProfiler.App";
+
+    private const string LoggingAbstractions = "Microsoft.Extensions.Logging.Abstractions";
 
     // Project -> projects it may reference. Every project under src/ must be listed here.
     private static readonly Dictionary<string, string[]> AllowedProjectReferences = new()
     {
-        ["IProfiler.Core"] = [],
-        ["IProfiler.Application"] = ["IProfiler.Core"],
-        ["IProfiler.Infrastructure"] = ["IProfiler.Core"],
-        ["IProfiler.Data"] = ["IProfiler.Core"],
-        ["IProfiler.App"] = ["IProfiler.Core", "IProfiler.Application", "IProfiler.Infrastructure", "IProfiler.Data"],
+        [Core] = [],
+        [Application] = [Core],
+        [Infrastructure] = [Core],
+        [Data] = [Core],
+        [App] = [Core, Application, Infrastructure, Data],
     };
 
-    public static TheoryData<string> ProjectsOutsideInfrastructure =>
-        new(AllowedProjectReferences.Keys.Where(p => p != Infrastructure));
+    // Rule 1: third-party imaging/scan/OCR/PDF libraries.
+    private static readonly string[] ImagingLibraries =
+        ["NTwain", "NAPS2", "Sdcb", "OpenCvSharp", "ZXing", "PdfSharp", "QuestPDF", "BitMiracle", "Tesseract"];
+
+    /// <summary>A group of libraries only one project may use, checked in compiled IL and in PackageReferences.</summary>
+    private sealed record Restriction(string Name, string AllowedIn, string[] Namespaces, string[] PackagePrefixes);
+
+    private static readonly Restriction[] Restrictions =
+    [
+        new("imaging", Infrastructure, ImagingLibraries, ImagingLibraries),
+        // Storage only lives in Data; the App wires it up through an extension method that Data exposes.
+        new("efcore", Data, ["Microsoft.EntityFrameworkCore"], ["Microsoft.EntityFrameworkCore"]),
+        // Serilog is configured in the composition root only; every other layer logs through ILogger<T>.
+        new("serilog", App, ["Serilog"], ["Serilog"]),
+    ];
+
+    public static TheoryData<string, string> RestrictedProjects()
+    {
+        var data = new TheoryData<string, string>();
+        foreach (var restriction in Restrictions)
+        {
+            foreach (var project in AllowedProjectReferences.Keys.Where(p => p != restriction.AllowedIn))
+                data.Add(restriction.Name, project);
+        }
+
+        return data;
+    }
 
     public static TheoryData<string> AllProjects => new(AllowedProjectReferences.Keys);
 
+    public static TheoryData<string> AbstractLoggingProjects => new(Core, Application, Infrastructure);
+
     [Theory]
-    [MemberData(nameof(ProjectsOutsideInfrastructure))]
-    public void Types_outside_infrastructure_do_not_depend_on_restricted_libraries(string project)
+    [MemberData(nameof(RestrictedProjects))]
+    public void Types_do_not_depend_on_libraries_restricted_to_another_project(string restriction, string project)
     {
+        var rule = Restrictions.Single(r => r.Name == restriction);
+
         var result = Types.InAssembly(Assembly.Load(project))
             .ShouldNot()
-            .HaveDependencyOnAny(RestrictedLibraries)
+            .HaveDependencyOnAny(rule.Namespaces)
             .GetResult();
 
         Assert.True(result.IsSuccessful,
-            $"{project} uses a library that belongs in {Infrastructure}: " +
+            $"{project} uses {restriction} types, which belong in {rule.AllowedIn}: " +
             string.Join(", ", result.FailingTypeNames ?? []));
     }
 
     [Theory]
-    [MemberData(nameof(ProjectsOutsideInfrastructure))]
-    public void Projects_outside_infrastructure_have_no_restricted_package_references(string project)
+    [MemberData(nameof(RestrictedProjects))]
+    public void Projects_have_no_package_references_restricted_to_another_project(string restriction, string project)
     {
+        var rule = Restrictions.Single(r => r.Name == restriction);
+
         var restricted = PackageReferences(project)
-            .Where(p => RestrictedLibraries.Any(r => p.StartsWith(r, StringComparison.OrdinalIgnoreCase)))
+            .Where(p => rule.PackagePrefixes.Any(r => p.StartsWith(r, StringComparison.OrdinalIgnoreCase)))
             .ToList();
 
         Assert.True(restricted.Count == 0,
-            $"{project} references {string.Join(", ", restricted)}; only {Infrastructure} may.");
+            $"{project} references {string.Join(", ", restricted)}; only {rule.AllowedIn} may.");
+    }
+
+    [Theory]
+    [MemberData(nameof(AbstractLoggingProjects))]
+    public void Project_logs_only_through_logging_abstractions(string project)
+    {
+        var loggingPackages = PackageReferences(project)
+            .Where(p => p.StartsWith("Microsoft.Extensions.Logging", StringComparison.OrdinalIgnoreCase) ||
+                        p.StartsWith("Serilog", StringComparison.OrdinalIgnoreCase))
+            .Where(p => !p.Equals(LoggingAbstractions, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        Assert.True(loggingPackages.Count == 0,
+            $"{project} references {string.Join(", ", loggingPackages)}; use ILogger<T> from {LoggingAbstractions}.");
     }
 
     [Fact]
-    public void Core_has_no_package_references()
+    public void Core_has_no_package_references_except_logging_abstractions()
     {
-        Assert.Empty(PackageReferences("IProfiler.Core"));
+        var packages = PackageReferences(Core)
+            .Where(p => !p.Equals(LoggingAbstractions, StringComparison.OrdinalIgnoreCase));
+
+        Assert.Empty(packages);
     }
 
     [Theory]
@@ -80,7 +130,7 @@ public class LayeringTests
     [Fact]
     public void Every_source_project_is_covered_by_these_rules()
     {
-        var projects = Directory.GetFiles(Path.Combine(RepoRoot.Value, "src"), "*.csproj", SearchOption.AllDirectories)
+        var projects = Directory.GetFiles(Path.Combine(RepoRoot.Path, "src"), "*.csproj", SearchOption.AllDirectories)
             .Select(Path.GetFileNameWithoutExtension)
             .Order();
 
@@ -91,16 +141,5 @@ public class LayeringTests
         LoadProject(project).Descendants("PackageReference").Select(r => (string)r.Attribute("Include")!);
 
     private static XDocument LoadProject(string project) =>
-        XDocument.Load(Path.Combine(RepoRoot.Value, "src", project, $"{project}.csproj"));
-
-    private static readonly Lazy<string> RepoRoot = new(() =>
-    {
-        for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir is not null; dir = dir.Parent)
-        {
-            if (File.Exists(Path.Combine(dir.FullName, "IProfiler.Desktop.sln")))
-                return dir.FullName;
-        }
-
-        throw new InvalidOperationException("IProfiler.Desktop.sln not found above the test output folder.");
-    });
+        XDocument.Load(Path.Combine(RepoRoot.Path, "src", project, $"{project}.csproj"));
 }

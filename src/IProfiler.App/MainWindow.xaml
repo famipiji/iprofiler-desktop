@@ -3,10 +3,20 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        xmlns:local="clr-namespace:IProfiler.App"
+        xmlns:vm="clr-namespace:IProfiler.App.ViewModels"
         mc:Ignorable="d"
+        d:DataContext="{d:DesignInstance Type=vm:MainViewModel}"
         Title="iProfiler Desktop" Height="450" Width="800">
-    <Grid>
-
-    </Grid>
+    <DockPanel Margin="8">
+        <TextBlock DockPanel.Dock="Bottom" Margin="0,8,0,0" Text="{Binding Status}" />
+        <ListView ItemsSource="{Binding Pages}">
+            <ListView.View>
+                <GridView>
+                    <GridViewColumn Header="#" Width="40" DisplayMemberBinding="{Binding Order}" />
+                    <GridViewColumn Header="Image" Width="560" DisplayMemberBinding="{Binding ImagePath}" />
+                    <GridViewColumn Header="Patch code" Width="120" DisplayMemberBinding="{Binding PatchCode}" />
+                </GridView>
+            </ListView.View>
+        </ListView>
+    </DockPanel>
 </Window>

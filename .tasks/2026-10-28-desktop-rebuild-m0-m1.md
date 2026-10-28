@@ -1,6 +1,6 @@
 # iProfiler Desktop — Rebuild Plan, Milestones 0–1 — 2026-10-28
 
-## STATUS: In Progress: Tasks 0.2–0.3 done; Task 0.1 deferred until before 1.1; next: Task 0.4
+## STATUS: In Progress: Tasks 0.2–0.4 done; Task 0.1 deferred until before 1.1; next: Task 0.5
 
 Execution plan for **iProfiler_Desktop_Rebuild_Plan.docx** (28 Aug 2026): a greenfield
 .NET / WPF rebuild of the legacy iProfiler ScanStation (WinForms + GdPicture). This is a **new
@@ -150,6 +150,18 @@ Also (D7): copy a set of **legacy ScanStation config files** from one real site 
 6. A minimal main window that lists fake pages from the fake scan provider, just enough to show DI and binding work.
 
 **Verify:** the app runs and shows fake pages; the log file appears; unit tests cover `SeparationMode` dispatch with the fake providers (one test per mode); the architecture tests still pass.
+
+**Result (2026-10-28): ✅**
+- **Core:** `Batch`/`Document`/`Page` (Page: `ImagePath`, `Rotation`, `Crop`, `Order`, hardware `PatchCode`); `SeparationMode` enum + one settings record per mode (`PageCountSettings`, `BarcodeSettings`, `BlankPageSettings`, `PatchCodeSettings`, `KeywordZoneSettings`; each carries its `Mode`); the 12 interfaces listed above; `AppPaths` (Install = `AppContext.BaseDirectory`, Data = `%LOCALAPPDATA%\iProfiler\`, plus `Logs`, `Scans`, `Models`, `Database`). Core still has no packages.
+- **Application:** `SeparationEngine`, the single `SeparationMode` dispatch (one `switch` over the settings records, one shared grouping loop; never emits an empty document; renumbers documents and pages).
+- **Infrastructure:** fakes for every interface in `Fakes/`, all answering from one canned 8-page batch (`FakeBatch`: keyword "INVOICE" p01/p04/p07, Code39 separator p03, blank p05, Patch T p06); `Ai/NullAiExtractionProvider` (D7, `IsAvailable = false`).
+- **App:** composition root `Composition/AppHost.cs`: `Host.CreateEmptyApplicationBuilder` with content root = install dir (no appsettings/env/cwd), `ValidateOnBuild` + `ValidateScopes`, Serilog rolling daily file `%LOCALAPPDATA%\iProfiler\logs\iprofiler-YYYYMMDD.log` (31 kept). Unhandled UI/AppDomain/task exceptions are logged. `MainWindow` + `MainViewModel` list the fake scan's pages.
+- **Review follow-ups (Task 0.3):** EF Core restricted to Data and Serilog restricted to App (IL check + PackageReference check); Core/Application/Infrastructure may only reference `Microsoft.Extensions.Logging.Abstractions` for logging. The review note said Serilog in App *or* Infrastructure; the 2026-10-28 instruction was **App only**, which is what's enforced.
+- **Added source-rule tests:** no `Environment.CurrentDirectory` / `Directory.Get|SetCurrentDirectory` in `src/` (rule 6), no empty or comment-only `catch` (rule 5). README code-review rules updated.
+- Build: 0 warnings, 0 errors. Tests: **47/47 passed** (34 layering, 2 source rules, 8 separation, 2 `AppPaths`, 1 host).
+- Separation tests, one per mode on the fake batch: PageCount(4) → [p01–p04][p05–p08]; Barcode Code39 "SEP-" → [p01–p02][p04–p08], p03 removed; BlankPage 0.99 → [p01–p04][p06–p08], p05 removed; PatchCode T kept → [p01–p05][p06–p08]; KeywordZone "invoice" → [p01–p03][p04–p06][p07–p08]. Plus: every enum value has settings and dispatches; non-matching barcode filter doesn't split; order renumbered.
+- Violation check: temporarily added EF Core + a `DbContext` to Application, Serilog + `Log.Information` to Infrastructure, `Microsoft.Extensions.Logging` to Core, and a `catch { }` + `Environment.CurrentDirectory` in Application → **9 failed** (each new rule caught its violation). Reverted → 47/47 pass.
+- App run: `IProfiler.App.exe` started with working directory `C:\Windows`; window "iProfiler Desktop" listed the 8 fake pages; closed with exit code 0. Log written: `%LOCALAPPDATA%\iProfiler\logs\iprofiler-20261028.log` (1,054 bytes) with startup (install + data paths), "Fake scan on fake-scanner at 300 dpi", "Loaded 8 pages from Fake Scanner (TWAIN)", and shutdown lines. The host test also checks the log file appears (in a temp data folder).
 
 ### Task 0.5: Installer proven on a clean machine
 

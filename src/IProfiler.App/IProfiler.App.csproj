@@ -1,5 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
-  <!-- WPF views/viewmodels + composition root. The only project that references everything. -->
+  <!-- WPF views/viewmodels + composition root. The only project that references everything,
+       and the only one that configures Serilog. -->
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net10.0-windows</TargetFramework>
@@ -11,5 +12,11 @@
     <ProjectReference Include="..\IProfiler.Application\IProfiler.Application.csproj" />
     <ProjectReference Include="..\IProfiler.Infrastructure\IProfiler.Infrastructure.csproj" />
     <ProjectReference Include="..\IProfiler.Data\IProfiler.Data.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Hosting" />
+    <PackageReference Include="Serilog" />
+    <PackageReference Include="Serilog.Extensions.Hosting" />
+    <PackageReference Include="Serilog.Sinks.File" />
   </ItemGroup>
 </Project>
