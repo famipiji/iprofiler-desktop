@@ -291,6 +291,19 @@ provider classes (those are kept). No real UI yet.
 - Tests: 59/59 (+8 OCR tests on a 150 dpi fixture: page text, reading order, word boxes, region, clipping, concurrency; +1 "no online model package").
 - Findings: Sdcb exposes **no character positions**, so word boxes come from ink gaps in the line (check against the searchable PDF in 1.5). Y-only sorting broke on skew, so lines are now grouped into rows. Publish is 458 MB uncompressed; trim `opencv_videoio_ffmpeg`, `onnxruntime` and `paddle2onnx` (~38 MB) in 1.6. Re-run on 5 real scans in 1.6.
 
+
+- Review (2026-10-28): ✅ approved. Follow-ups:
+  - **Task 1.3/1.4: add a 1-bit black-and-white CCITT G4 TIFF sample** (300 dpi). That's the default `ScanColorMode`
+    and what production scanners usually output; all samples so far are grayscale/colour. Confirm OCR, barcode and
+    white-ratio all read it (OpenCV decode of G4, and quality after the 1600 px downscale of thin B/W strokes).
+  - **Task 1.4: upside-down pages.** `Enable180Classification = false`, so a sheet fed upside down won't be read.
+    Decide there: detect orientation (cheap check: OCR confidence 0° vs 180°) and store it as `Page.Rotation` metadata.
+  - **Task 1.5:** validate the ink-gap word boxes in the searchable PDF (phrase search, words with wide letter spacing).
+  - **Task 1.6:** the network-off Sandbox run moves here (one run for the whole end-to-end spike, with SAC turned off in
+    the sandbox as in Task 0.5). The host run with 0 network endpoints and the "no online model package" test are
+    enough for now. Also trim natives (458 MB publish) and consider the smaller OpenBLAS Paddle runtime if speed holds.
+  - **M2:** switch `AppHost` from `FakeOcrProvider` to `PaddleOcrProvider` once the viewer uses it; register as a singleton.
+
 ### Task 1.3: Barcode + QR: ZXing.Net
 
 1. `ZXingBarcodeProvider : IBarcodeProvider` (ZXing.Net with OpenCvSharp bindings, so it reuses the same image types as OCR).
