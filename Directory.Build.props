@@ -1,0 +1,15 @@
+<Project>
+  <!-- Shared settings for every project in the solution. -->
+  <PropertyGroup>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <!-- D2: x64 app (PaddleOCR is x64-only); 32-bit TWAIN drivers go through a worker process. -->
+    <PlatformTarget>x64</PlatformTarget>
+    <Platforms>x64</Platforms>
+    <Company>iProfiler</Company>
+    <Product>iProfiler Desktop</Product>
+    <Version>0.1.0</Version>
+  </PropertyGroup>
+</Project>

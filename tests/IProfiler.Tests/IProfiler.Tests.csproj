@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="NetArchTest.Rules" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\IProfiler.Core\IProfiler.Core.csproj" />
+    <ProjectReference Include="..\..\src\IProfiler.Application\IProfiler.Application.csproj" />
+    <ProjectReference Include="..\..\src\IProfiler.Infrastructure\IProfiler.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\IProfiler.Data\IProfiler.Data.csproj" />
+    <ProjectReference Include="..\..\src\IProfiler.App\IProfiler.App.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+</Project>

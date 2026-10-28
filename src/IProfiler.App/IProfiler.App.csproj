@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- WPF views/viewmodels + composition root. The only project that references everything. -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <AssemblyName>IProfiler.App</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\IProfiler.Core\IProfiler.Core.csproj" />
+    <ProjectReference Include="..\IProfiler.Application\IProfiler.Application.csproj" />
+    <ProjectReference Include="..\IProfiler.Infrastructure\IProfiler.Infrastructure.csproj" />
+    <ProjectReference Include="..\IProfiler.Data\IProfiler.Data.csproj" />
+  </ItemGroup>
+</Project>
