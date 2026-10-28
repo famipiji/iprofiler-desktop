@@ -502,3 +502,4 @@ samples/legacy/
 *.snk
 .env
 secrets.json
+samples/spike/

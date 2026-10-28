@@ -12,3 +12,8 @@ One line per task: date, task, result, commit.
 | 2026-10-28 | Task 0.3 solution skeleton + global.json (SDK 10.0.403) + architecture tests (15/15 pass; ZXing probe fails 1–2 tests as intended) + CI workflow; pushed to GitHub, first CI run green | ✅ | ac1c710 |
 | 2026-10-28 | Task 0.4 domain + 12 interfaces + SeparationEngine + fakes + DI/Serilog + AppPaths + main window; EF Core/Serilog/logging rules + source rules added (47/47 pass, 9 probe violations caught); app shows 8 fake pages, log written | ✅ | see git log |
 | 2026-10-28 | Task 0.5 installer (46.8 MB, unsigned) + startup-error fallback log/message + friendly UI-crash message (50/50 tests); automated Sandbox install blocked by App Control policy, Verify pending (manual) | ⏳ | see git log |
+| 2026-10-28 | Task 0.5 Verify passed in Sandbox (install, Start-menu launch 8 pages, log, uninstall keeps data); SAC blocks unsigned installer → code signing = pilot blocker | ✅ | 4443dca |
+| 2026-10-28 | Task 0.6: Notion backlog board (31 rows), docs/risk-register.md (R1–R14), design-note template; M0 gate pending team-lead review | ✅ | — |
+| 2026-10-28 | Code-signing certificate deferred (needed before pilot) | ⏸ | — |
+| 2026-10-28 | Task 0.1 (office part): AD7100 + FB6380E have 32/64-bit TWAIN; 0 scanners without 64-bit driver; AD7100 = Task 1.1 test scanner. Client sites + legacy samples open | 🟡 | — |
+| 2026-10-28 | Task 0.1 remainder deferred; M1 reordered: 1.2 → 1.3 → 1.4 → 1.5 → 1.1 (needs AD7100) → 1.6 | ⏸ | — |

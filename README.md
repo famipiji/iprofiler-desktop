@@ -36,3 +36,6 @@ folder isn't writable). After startup, everything goes to `%LOCALAPPDATA%\iProfi
 **unsigned**. Client sites will see SmartScreen "Windows protected your PC / unknown publisher"
 warnings, and some sites' policies block unsigned installers outright. A code-signing certificate
 (OV or EV) is needed, then sign both the app exe and the setup exe (Inno `SignTool`).
+
+- Backlog board (Notion): https://app.notion.com/p/402328f456c0472a9729eaf1879fbbe2
+- Risks: [`docs/risk-register.md`](./docs/risk-register.md) · Design notes: [`docs/design-notes/`](./docs/design-notes/TEMPLATE.md)

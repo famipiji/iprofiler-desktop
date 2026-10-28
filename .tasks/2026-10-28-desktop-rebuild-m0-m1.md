@@ -62,6 +62,12 @@ Cowork / Claude Code.
 
 **⏸ Deferred (2026-10-28):** skipped for now. **Must be done before Task 1.1** (the scanner spike), so 1.1 is tested on the right scanner model. Helper script: `tools/scanner-inventory.ps1`.
 
+**Result (2026-10-28): 🟡 partial, office done; client sites + legacy samples still open** (see `docs/scanner-inventory.md`)
+- Office PC: **Avision AD7100** (production ADF, duplex, 100 ppm) and **Avision FB6380E** (flatbed) both have **32- and 64-bit TWAIN** + WIA drivers; Brother DCP-T720DW is WIA-only. TWAINDSM 32/64 present.
+- Scanners without a 64-bit driver: **0** (office). The x64 app should talk to the Avisions directly; the 32-bit worker stays as insurance for client sites.
+- **Task 1.1 test scanner: Avision AD7100** (plug it in first; it wasn't connected during the inventory run). Test both 64-bit direct **and** forced through the 32-bit worker (its 32-bit driver exists), so both paths are proven.
+- Patch-code support on the AD7100: not on Avision's spec page; check the driver's settings for a patch-code option during Task 1.1.
+
 **File:** `TWAIN_Scanner_Inventory.xlsx` (Documentation folder of the ScanStation project)
 
 For every scanner at every client site, record:
@@ -181,7 +187,7 @@ Also (D7): copy a set of **legacy ScanStation config files** from one real site 
 
 **Verify (in Windows Sandbox):** install, then launch **from the Start-menu shortcut** (this proves the path handling works outside the install dir), the fake pages show, the log is written, uninstall leaves no files in Program Files. Record the installer size (the baseline before the PaddleOCR models are added).
 
-**Result (2026-10-28): ⏳ build done; Verify pending (manual Sandbox test by the user)**
+**Result (2026-10-28): ✅ Verify passed in Windows Sandbox (manual test, SAC off in sandbox). See the test results below. Pilot blocker: code signing.**
 - **Publish:** `dotnet publish src/IProfiler.App -c Release -r win-x64 --self-contained true` → `artifacts/publish/win-x64`: 150 MB, 308 files.
 - **Installer:** `installer/iprofiler.iss` (Inno Setup 6.7.3) → `installer/Output/iProfilerDesktop-Setup-0.1.0.0.exe`, **46.8 MB (49,085,283 bytes)**. That is the baseline before the PaddleOCR models.
   - Per-machine install to `{autopf}\iProfiler Desktop`, x64 only.
@@ -195,12 +201,32 @@ Also (D7): copy a set of **legacy ScanStation config files** from one real site 
   - Unhandled UI exception: logged as critical, then a friendly message box, then `Shutdown(1)`, so `OnExit` flushes the log. Not exercised at runtime (the app has no way to trigger one).
 - README: installer section, startup-error log locations, and the code-signing gap in more detail.
 - Build: 0 warnings, 0 errors. Tests: **50/50 passed** (3 new `StartupErrorLog` tests, plus a `StartupErrorLog` path check in `AppPathsTests`).
-- **Sandbox attempt (automated, networking disabled): ❌ blocked.** The silent install was refused by Windows inside the sandbox: *"An Application Control policy has blocked this file."* The installer is unsigned (`Get-AuthenticodeSignature`: NotSigned). Smart App Control on the host is off, so the policy is the sandbox's own. It's unknown whether it blocks all unsigned files or only files run from the mapped folder. Nothing was installed, so no Verify check ran. Per the user: no retry. **Risk for the pilot:** client PCs with App Control / Smart App Control on may block the unsigned installer and app; this adds to the code-signing gap (risk register, Task 0.6).
+- **Sandbox attempt (automated, networking disabled): ❌ blocked.** The silent install was refused by Windows inside the sandbox: *"An Application Control policy has blocked this file."* The installer is unsigned (`Get-AuthenticodeSignature`: NotSigned). Smart App Control on the host is off, so the policy is the sandbox's own. ~~It's unknown whether it blocks all unsigned files or only files run from the mapped folder.~~ **Answered by the manual test below: it blocks unsigned apps in general (Smart App Control).** Nothing was installed, so no Verify check ran. Per the user: no retry. **Risk for the pilot:** client PCs with App Control / Smart App Control on may block the unsigned installer and app; this adds to the code-signing gap (risk register, Task 0.6).
 - **Still to do (user, manual):** in Windows Sandbox:
   1. Install, then launch from the Start-menu shortcut. Check the 8 fake pages show and `%LOCALAPPDATA%\iProfiler\logs\iprofiler-*.log` is written.
   2. Uninstall, and check `C:\Program Files\iProfiler Desktop` is gone and the data folder is kept.
   3. Optionally, make `%LOCALAPPDATA%\iProfiler\logs` a file to see the startup-error message and `startup-error.log`.
   4. Record the results here.
+
+
+- Review (2026-10-28): ✅ code approved; **Verify still pending** (manual install test). Notes:
+  - Startup fallback, friendly UI-error message, per-machine install, no shortcut working dir, and keep-data-on-uninstall are all done well.
+  - `AppPublisher=iProfiler`: set it to the legal company name (e.g. DCS Consulting) **before** buying the certificate. The publisher shown by Windows comes from the certificate and should match.
+  - When the cert arrives: add Inno `SignTool=` to sign both the app exe and the setup exe; re-test on a clean machine with Smart App Control **on**.
+  - Later (M5): test upgrade-over-previous-version (same `AppId`) and that an admin uninstall only removes the admin's own `%LOCALAPPDATA%` data (documented behaviour).
+
+**Smart App Control finding (2026-10-28, manual Sandbox test):** the unsigned installer copied onto the
+sandbox's own desktop (not the shared folder) was blocked by **Smart App Control**: "could not verify its
+publisher". So the block applies to unsigned apps in general, not to the shared folder. Any client PC with
+Smart App Control on (it's turned on for many clean Windows 11 installs) would block it the same way.
+**Code signing is a pilot blocker**: raise it with the team lead and add it to the risk register (Task 0.6). Functional
+Verify is finished with SAC turned off inside the throwaway sandbox (or a Hyper-V VM).
+**Install inside Sandbox ✅ (2026-10-28)** after turning SAC off in the sandbox only: `reg add HKLM\SYSTEM\CurrentControlSet\Control\CI\Policy /v VerifiedAndReputablePolicyState /t REG_DWORD /d 0 /f` then `CiTool.exe -r` (no restart).
+- ✅ **Start-menu launch:** window "iProfiler Desktop" lists the 8 fake pages (p01–p08 under `C:\Users\WDAGUtilityAccount\AppData\Local\iProfiler\scans\fake\`, PatchT on p06).
+- ✅ **Log:** `%LOCALAPPDATA%\iProfiler\logs\iprofiler-20261028.log` has two clean runs (12:25 post-install launch, 12:27 Start-menu launch): content root `C:\Program Files\iProfiler Desktop\`, started 0.1.0.0, fake scan at 300 dpi, 8 pages loaded, exit code 0.
+- ✅ **Uninstall** (answered No to removing data): `C:\Program Files\iProfiler Desktop` removed; `%LOCALAPPDATA%\iProfiler` (with `logs`) kept.
+- **Task 0.5 Verify: ✅ PASSED (2026-10-28)** in Windows Sandbox with SAC off. Open pilot blocker: code signing (SAC blocks the unsigned installer).
+- Small follow-up: the log contains the console-host lines "Press Ctrl+C to shut down" / "Hosting environment: Production", which don't fit a WPF app. Silence them with `ConsoleLifetimeOptions.SuppressStatusMessages = true` (or by not using the console lifetime) in a later task.
 
 ### Task 0.6: Backlog + process artifacts 👤 manual
 
@@ -211,9 +237,22 @@ Also (D7): copy a set of **legacy ScanStation config files** from one real site 
 
 **Verify:** team lead has seen the board and the risk register. **Milestone 0 gate: team lead OK to start the spike.**
 
+
+**Result (2026-10-28): ✅ artifacts created; ⏳ Milestone 0 gate (team-lead review) pending**
+- Notion: page **iProfiler Desktop** → database **iProfiler Desktop Backlog** (https://app.notion.com/p/402328f456c0472a9729eaf1879fbbe2), 31 rows (decisions, M0 tasks with commits, code-signing blocker, M1 tasks 1.1–1.6, M2–M6 slices). Status = Backlog / Design / Deferred / Spike / Build / Regression / UAT / Done / Released. The page is private: share it with the team lead.
+- `docs/risk-register.md`: R1–R14 (R1 code signing / Smart App Control = pilot blocker).
+- `docs/design-notes/TEMPLATE.md`: half-page template, signed off before each slice is coded.
+- `progress.md`: in use since setup.
+
 ---
 
 ## D. Milestone 1 — Architecture spike (proof, not production code)
+
+> **Run order changed (2026-10-28):** 1.2 → 1.3 → 1.4 → 1.5 → **1.1** → 1.6. No scanner is connected yet, so the
+> tasks that only need image files go first. 1.2–1.5 use sample scans: put a few real-world TIFF/JPG/PDF pages
+> (invoice, form with a barcode, a skewed page, a blank page, a QR) in `samples/spike/`, or generate test images
+> in code where needed (barcodes, blank/skewed pages). **Task 1.1 needs the Avision AD7100 connected**; Task 0.1's
+> remaining parts (client-site list, legacy samples) can wait until before M5.
 
 Everything here goes in a throwaway `spike/` console project **plus** the real Infrastructure
 provider classes (those are kept). No real UI yet.
