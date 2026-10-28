@@ -8,9 +8,12 @@ using IProfiler.Infrastructure.Ocr;
 using Microsoft.Extensions.Logging;
 
 // Milestone 1 spike. Task 1.2: full-page OCR + one field-region OCR per sample, offline. Task 1.3: barcodes. Task 1.4: imaging.
-// Task 1.5: SQLite + PDF-OCR/TIFF export.
+// Task 1.5: SQLite + PDF-OCR/TIFF export. Task 1.6: end-to-end in import mode.
 //   IProfiler.Spike ocr <samples dir> [report.json]
 // The samples dir holds the images and expected.json (written by tools/make-ocr-samples.py).
+
+if (args is ["e2e", var e2eSamplesDir, var e2eOutDir])
+    return await EndToEndSpike.RunAsync(e2eSamplesDir, e2eOutDir);
 
 if (args is ["imaging", var imagingDir])
     return await ImagingSpike.RunAsync(imagingDir);
@@ -27,6 +30,7 @@ if (args is not ["ocr", var samplesDir, ..])
     Console.Error.WriteLine("       IProfiler.Spike barcodes <samples dir> [extra patch-sheet files...]");
     Console.Error.WriteLine("       IProfiler.Spike imaging <tests TestData dir>");
     Console.Error.WriteLine("       IProfiler.Spike export <tests TestData dir> <out dir>");
+    Console.Error.WriteLine("       IProfiler.Spike e2e <samples dir> <out dir>");
     return 2;
 }
 

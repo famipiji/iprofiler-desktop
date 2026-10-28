@@ -6,6 +6,12 @@
 #ifndef PublishDir
   #define PublishDir "..\artifacts\publish\win-x64"
 #endif
+; Visual C++ runtime (msvcp140, vcruntime140, vcruntime140_1, vcomp140), installed next to the exe (app-local).
+; PaddleOCR's onnxruntime.dll / paddle2onnx.dll and MKL's mkldnn.dll need it, and a clean Windows may not have it.
+#ifndef VcRuntimeDir
+  #error VcRuntimeDir is not set: pass /DVcRuntimeDir=<folder with the x64 VC++ runtime DLLs> (build-installer.ps1 does)
+#endif
+; Optional, Milestone 1 only: SpikeDir adds the self-contained IProfiler.Spike console (end-to-end check in Sandbox).
 ; Version comes from the published assembly (Directory.Build.props <Version>).
 #define AppVersion GetVersionNumbersString(AddBackslash(PublishDir) + AppExe)
 
@@ -25,7 +31,11 @@ DisableProgramGroupPage=yes
 UninstallDisplayIcon={app}\{#AppExe}
 UninstallDisplayName={#AppName}
 OutputDir=Output
+#ifdef SpikeDir
+OutputBaseFilename=iProfilerDesktop-Setup-{#AppVersion}-spike
+#else
 OutputBaseFilename=iProfilerDesktop-Setup-{#AppVersion}
+#endif
 Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern
@@ -33,6 +43,11 @@ WizardStyle=modern
 
 [Files]
 Source: "{#PublishDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#VcRuntimeDir}\*.dll"; DestDir: "{app}"; Flags: ignoreversion
+#ifdef SpikeDir
+; Only the files the app doesn't already install (build-installer.ps1 checks the shared ones are identical).
+Source: "{#SpikeDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+#endif
 
 [Icons]
 ; No WorkingDir on purpose: the app must not depend on it (AppPaths, CLAUDE.md rule 6).

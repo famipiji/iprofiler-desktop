@@ -1,6 +1,6 @@
 # iProfiler Desktop — Rebuild Plan, Milestones 0–1 — 2026-10-28
 
-## STATUS: In Progress: M0 done (0.2–0.6 ✅, M0 gate = team-lead review pending; 0.1 office part done); 1.2 OCR ✅, 1.3 barcodes/QR/patch ✅, 1.4 deskew/blank/orientation ✅, 1.5 SQLite + PDF-OCR/TIFF ✅ (⚠ PDFsharp licence, R12); 1.1 ⏸ (AD7100 not connected; NAPS2.Sdk is LGPL-2.1, team-lead decision R3), then 1.6
+## STATUS: In Progress: M0 done (0.2–0.6 ✅, M0 gate = team-lead review pending; 0.1 office part done); 1.2–1.5 ✅ (⚠ PDFsharp licence, R12); 1.1 ⏸ deferred (AD7100 not connected; D8 NAPS2 LGPL vs NTwain); 1.6 🟡 import mode ✅ on host, installer 118.8 MB, network-off Sandbox run pending (manual); spike report: D6 GO, conditional on 1.1. M1 gate = conditional, team-lead sign-off pending
 
 Execution plan for **iProfiler_Desktop_Rebuild_Plan.docx** (28 Aug 2026): a greenfield
 .NET / WPF rebuild of the legacy iProfiler ScanStation (WinForms + GdPicture). This is a **new
@@ -459,6 +459,44 @@ provider classes (those are kept). No real UI yet.
    - **a go/no-go recommendation on D6 (open-source vs paid SDK)**
 
 **Verify:** the end-to-end run works offline from the installed app. **Milestone 1 gate: team lead signs off on the spike report before any Milestone 2 UI is built.**
+
+**Result (2026-10-28): 🟡 import mode ✅ on host; ⏳ network-off Sandbox run pending (manual); scan acquisition pending (Task 1.1)** (details: `docs/spike-report.md`)
+- **Import instead of scan:** new `FileImportProvider : IImportProvider`:
+  - byte-identical copies into `AppPaths.Scans`
+  - multi-page TIFF split by raw strip/tile copy (no re-encode)
+  - TIFF DPI read into `Page.Dpi`
+  - PDF refused for now (M2)
+- **`IProfiler.Spike e2e` on the host: `ok: true`, 4 pages:**
+  - field OCR `INV-2026-10457` exact; barcodes 3/3; Patch T found; all upright; deskew 0.60/−0.45/0.50/0.25°
+  - `SeparationEngine` (Code39 `SEP-`) → 2 documents
+  - SQLite 108 KB, 0 BLOB values; OCR 18/18 words
+  - PDF-OCR: 18/18 words found in MuPDF **and** PDFium; TIFF 4 pages in order
+  - originals unchanged
+  - Timings: orientation+skew 2.3–3.7 s, page OCR 2.2–4.0 s, barcodes 0.3–1.0 s, field 0.89 s, PDF 1.4 s, TIFF 1.6 s;
+    **35.0 s for 4 pages** (i5-1135G7).
+- **Trim:**
+  - `opencv_videoio_ffmpeg` (27.9 MB) dropped via `Directory.Build.targets`.
+  - ⚠ **`onnxruntime` / `paddle2onnx` / `onnxruntime_providers_shared` can't go.** `paddle_inference_c.dll` imports
+    them, and with them deleted OCR fails with `DllNotFoundException`.
+  - Publish 533 → 504.6 MB.
+- ⚠ **New: VC++ runtime (R17).**
+  - The Paddle/MKL natives need `msvcp140`/`vcruntime140`/`vcruntime140_1`/`vcomp140`, which aren't in the publish.
+  - The installer now ships them app-local and won't compile without them.
+  - In a copy of the install folder they load from the app folder.
+  - This build took them from the dev PC's System32, because VS has no C++ Redist folder. Production must use the VS
+    Redist folder.
+  - Also R18: OpenCvSharpExtern imports Media Foundation (Windows N editions).
+- **Installer:** **118.8 MB (124,609,022 bytes)** with models + natives + VC++ runtime (baseline 46.8 MB). The
+  `-WithSpike` variant (+ `IProfiler.Spike.exe`) is 118.9 MB.
+- **Sandbox kit** in `artifacts/sandbox-e2e/` (`e2e-offline.wsb`, networking disabled; `tools/sandbox/run-e2e.cmd`).
+  Pending: the user runs it with SAC turned off in the sandbox, then `tools/check-e2e-output.py` on the results.
+- **Not done:** OCR on 5 real scans (only generated samples exist), so it moves to Task 1.1 with the AD7100 (R6). Scan
+  timings and the x64 vs worker result also stay in 1.1.
+- **Spike report summary + D6 recommendation: GO on the open-source stack, conditional on Task 1.1** (scanning library
+  D8, real scans). Open: R12 PDF library, R1 code signing.
+- Findings: the 200 dpi letter has white ratio 0.99321, so it counts as **blank** at 0.99. M3 needs "and no confident
+  text". Separation re-reads barcodes, so M2/M3 should cache page analysis.
+- Tests: **134/134** (+3 import); build 0 warnings.
 
 ---
 

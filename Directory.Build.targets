@@ -1,0 +1,14 @@
+<Project>
+  <!-- Native files from NuGet packages that the app never loads, kept out of build and publish output.
+       opencv_videoio_ffmpeg (28 MB): OpenCV loads it on demand for video capture/writing only; we read still images.
+       onnxruntime.dll and paddle2onnx.dll look unused too, but paddle_inference_c.dll imports both at load time,
+       so removing them stops PaddleOCR loading (Task 1.6, docs/spike-report.md). -->
+  <Target Name="DropUnusedNativeFiles" AfterTargets="ResolvePackageAssets">
+    <ItemGroup>
+      <NativeCopyLocalItems Remove="@(NativeCopyLocalItems)"
+                            Condition="$([System.String]::Copy('%(Filename)').StartsWith('opencv_videoio_ffmpeg'))" />
+      <RuntimeTargetsCopyLocalItems Remove="@(RuntimeTargetsCopyLocalItems)"
+                                    Condition="$([System.String]::Copy('%(Filename)').StartsWith('opencv_videoio_ffmpeg'))" />
+    </ItemGroup>
+  </Target>
+</Project>

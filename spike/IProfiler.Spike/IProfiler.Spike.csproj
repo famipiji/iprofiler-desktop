@@ -6,7 +6,14 @@
     <TargetFramework>net10.0-windows</TargetFramework>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <SelfContained>false</SelfContained>
+    <!-- Same framework files as the WPF app, so the Task 1.6 spike installer can put both exes in one folder
+         (otherwise WindowsBase.dll and System.Security.Cryptography.Pkcs.dll differ). Still a console app. -->
+    <UseWPF>true</UseWPF>
   </PropertyGroup>
+  <ItemGroup>
+    <!-- UseWPF drops System.IO from the implicit usings. -->
+    <Using Include="System.IO" />
+  </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\IProfiler.Core\IProfiler.Core.csproj" />
     <ProjectReference Include="..\..\src\IProfiler.Application\IProfiler.Application.csproj" />

@@ -19,8 +19,15 @@ export, upload). Ground-up rebuild of iProfiler ScanStation.
 ## Installer
 
 ```powershell
-installer\build-installer.ps1   # publish (self-contained win-x64) + Inno Setup compile
+installer\build-installer.ps1                       # publish (self-contained win-x64) + Inno Setup compile
+installer\build-installer.ps1 -VcRuntimeDir <dir>   # if VS has no C++ Redist folder installed
+installer\build-installer.ps1 -WithSpike            # Milestone 1 only: adds IProfiler.Spike.exe (-spike.exe)
 ```
+
+The installer also puts the **Visual C++ runtime** (`msvcp140`, `vcruntime140`, `vcruntime140_1`, `vcomp140`)
+next to the exe: PaddleOCR's and MKL's native DLLs need it, and a clean Windows may not have it (risk R17). By
+default the script takes it from Visual Studio's `VC\Redist\MSVC\<ver>\x64` folder (the VS "MSVC C++ x64 build
+tools" component); release builds must use that folder.
 
 Output: `installer\Output\iProfilerDesktop-Setup-<version>.exe`. The version comes from `<Version>`
 in `Directory.Build.props`. Per-machine install to Program Files with a Start-menu shortcut; no .NET

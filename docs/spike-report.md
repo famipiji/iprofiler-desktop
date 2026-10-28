@@ -1,7 +1,7 @@
 # Milestone 1 spike report
 
-Filled in task by task (run order 1.2 → 1.3 → 1.4 → 1.5 → 1.1 → 1.6). Task 1.6 adds the summary and
-the go/no-go recommendation on D6.
+Filled in task by task (run order 1.2 → 1.3 → 1.4 → 1.5 → 1.1 (deferred) → 1.6 in import mode). The
+summary and the go/no-go recommendation on D6 are at the end.
 
 ## Task 1.2: OCR (PaddleOCR in-process, offline), 2026-10-28
 
@@ -280,3 +280,155 @@ confirm):
 Next, once the scanner is connected and (a)/(b) is decided: steps 2–5 of Task 1.1 plus the review follow-ups (direct
 x64 vs worker, 300 dpi B/W + one grayscale run, AD7100 driver features, Kodak patch sheets hardware vs
 `OpenCvPatchCodeDetector`, OCR/barcode/skew/white/orientation on the real scans).
+
+## Task 1.6: End-to-end run (import mode), installer, 2026-10-28
+
+Task 1.1 is deferred (AD7100 not connected; D8 NAPS2 LGPL vs NTwain open), so pages come from files through the
+new **`FileImportProvider : IImportProvider`** instead of a scan:
+- copies each original into its own folder under `AppPaths.Scans` (byte-identical)
+- splits a multi-page TIFF into single-page TIFFs by copying tags + compressed strips/tiles (no re-encode)
+- reads the TIFF DPI tag into `Page.Dpi`
+- refuses PDFs and other formats for now (PDF import is M2)
+
+Tests: 3 new (byte-identical copies, 2-page G4 + LZW split pixel-identical with the same compression, PDF refused).
+
+**Flow** (`IProfiler.Spike e2e <samples> <out>`, all real providers, DI as in the app):
+1. import 4 pages
+2. per page: `PageAnalyzer` (orientation + skew), white ratio, barcodes, software patch code
+3. OCR the invoice-number field region
+4. separation through `SeparationEngine` (Code39 `SEP-` starts a document)
+5. SQLite store, then read back through a new context
+6. OCR each page's upright render for the text layer
+7. PDF-OCR + multi-page TIFF exported from the stored metadata
+
+`report.json` has `ok: true` only if every check passes.
+
+**Host result (i5-1135G7, 8 threads, self-contained Release build): ✅ `ok: true`**
+
+| Check | Result |
+|---|---|
+| Imported copies identical to the sources; sources and copies unchanged after export | ✅ (SHA-256) |
+| Field OCR `InvoiceNo` | `INV-2026-10457` exact |
+| Barcodes on the G4 delivery note | **3/3** (Code39, Code128, QR) |
+| Patch T sheet (software check) | `PatchT`; other pages none |
+| Orientation / skew | all upright; deskew 0.60 / −0.45 / 0.50 / 0.25° |
+| Separation | 2 documents (invoice + letter, delivery note + patch sheet) |
+| SQLite | 4 pages stored, 108 KB (db + WAL), no image signatures; `check-e2e-output.py`: **0 BLOB values** |
+| OCR words on the text pages | **18/18** (6/6 on each of the 3 pages) |
+| PDF-OCR in real readers (`tools/check-e2e-output.py`) | 4 pages; **18/18** words found in **MuPDF and PDFium** on the right page |
+| Multi-page TIFF | 4 pages in order (L, L, 1, 1), sizes match the PDF pages; 820 KB |
+
+**Timings (host, warm after the first page):**
+
+| Step | Time |
+|---|---|
+| Import 4 files | 0.14 s |
+| Orientation + skew per page | 2.3–3.7 s |
+| White ratio per page | 20–61 ms |
+| Barcodes per page | 0.28–0.96 s |
+| Patch code per page | 18–82 ms |
+| Field OCR | 0.89 s |
+| Separation (re-reads barcodes) | 1.65 s |
+| SQLite migrate + store + read back | 1.34 s |
+| Page OCR for the text layer | 2.2–4.0 s |
+| PDF-OCR (4 pages, 595 KB) | 1.41 s |
+| Multi-page TIFF (4 pages) | 1.58 s |
+| **Total, 4 pages** | **35.0 s** (≈ 8.8 s per page with everything on) |
+
+**Native trim.**
+- `opencv_videoio_ffmpeg4110_64.dll` (27.9 MB) removed by `Directory.Build.targets` from every build and publish.
+  OpenCV loads it only for video.
+- **`onnxruntime.dll`, `paddle2onnx.dll` and `onnxruntime_providers_shared.dll` can't be removed.**
+  `paddle_inference_c.dll` imports the first two at load time (PE import table), and Sdcb's loader preloads the third.
+  With all three deleted, OCR fails: `DllNotFoundException: Unable to load shared library 'paddle_inference_c'`
+  (`onnxruntime_providers_shared.dll: FAIL`).
+- App publish: 533 MB / 336 files → **504.6 MB / 483 files** (the extra files are the WPF satellite resources).
+- The smaller OpenBLAS Paddle runtime wasn't tried; it's an M2 option if speed holds.
+
+**New finding: Visual C++ runtime (R17).**
+- `onnxruntime.dll` / `paddle2onnx.dll` import `MSVCP140`, `VCRUNTIME140` and `VCRUNTIME140_1`; `mkldnn.dll` imports
+  `VCOMP140`. The .NET publish has none of them.
+- On the dev PC they come from System32 (VC++ 14.51 installed by other software). A clean PC may not have them.
+- Fix: the installer now ships the four DLLs **app-local**. `iprofiler.iss` refuses to compile without `VcRuntimeDir`.
+- Checked on a copy of the installed folder: the spike loads all four from the app folder, not System32.
+- This build took them from the dev PC's System32 (14.51.36247, Microsoft-signed), because VS 2026 has no C++ Redist
+  folder installed. Production builds must take them from `VC\Redist\MSVC\<ver>\x64` (install the VS C++ build tools).
+- Also seen (R18): `OpenCvSharpExtern.dll` imports Media Foundation, which Windows N editions lack.
+
+**Installer** (`installer/build-installer.ps1 -VcRuntimeDir <dir> [-WithSpike]`, Inno Setup 6.7.3, lzma2/max):
+
+| Installer | Size |
+|---|---|
+| Task 0.5 baseline (fake providers, no models) | 46.8 MB (49,085,283 bytes) |
+| **Production, with PP-OCRv5 models (12.3 MB), Paddle/MKL/OpenCV natives, VC++ runtime** | **118.8 MB (124,609,022 bytes)** |
+| Spike variant (+ `IProfiler.Spike.exe`, 5 files, ~0.3 MB) | 118.9 MB (124,694,803 bytes) |
+
+- The spike gets the same shared framework as the app (`UseWPF`), so both exes can share one folder. The build checks
+  that every file the two share is identical.
+- Without that, `WindowsBase.dll` and `System.Security.Cryptography.Pkcs.dll` differed (caught by the check).
+
+**Network-off Sandbox run: ⏳ pending (manual, user).**
+- Kit: `artifacts/sandbox-e2e/` holds `e2e-offline.wsb` (networking disabled), with `kit\` mapped read-only to
+  `C:\e2e` (spike installer, samples, `run-e2e.cmd` from `tools/sandbox/`) and `results\` mapped writable to
+  `C:\e2e-results`.
+- The script records whether the clean System32 has the VC++ runtime (answers R17), installs silently, runs the e2e
+  from `C:\Program Files\iProfiler Desktop`, and writes `report.json`, `console.txt`, `install.log` and `env.txt`
+  (with `netstat`).
+- Expected: `ok: true`, `network: false`, `vcRuntime` paths under `C:\Program Files\iProfiler Desktop`.
+- Then on the host: `python tools/check-e2e-output.py artifacts/sandbox-e2e/results/e2e samples/spike`.
+
+**Not done here:**
+- OCR accuracy on **5 real scans**: `samples/spike/` holds only the generated pages (invoice, letter, G4 delivery note,
+  patch sheet). It moves to Task 1.1, using AD7100 scans (R6 stays open).
+- Scan timings, and the x64 vs worker result: Task 1.1.
+
+**Findings for M2/M3:**
+- **The 200 dpi letter scores white ratio 0.99321**, so at the default 0.99 it counts as **blank**, like the sparse
+  page in 1.4. M3 must use "white ratio ≥ threshold **and** no confident text line".
+- Separation re-reads every page's barcodes that analysis already read (+0.3–1 s per page). M2/M3 should cache page
+  analysis results (barcodes, white ratio, orientation score, OCR) on the page and let separation use them.
+- At ≈ 8.8 s per page with everything on, the background analysis queue (Task 1.4 review) is required. Profiles should
+  turn on only the steps they need.
+- `AppHost` still registers `FakeImportProvider`; switch it to `FileImportProvider` with the M2 import UI.
+- JPEG/PNG DPI isn't read on import yet (export estimates it).
+
+---
+
+## Summary and D6 recommendation (Milestone 1 gate, conditional)
+
+| Area | Library (licence) | Result | Status |
+|---|---|---|---|
+| Scan acquisition (TWAIN/WIA, x64 + 32-bit worker) | NAPS2.Sdk (LGPL-2.1) or NTwain (MIT) | Not tested: AD7100 not connected; D8 licence decision open | ⏸ **pending (Task 1.1)** |
+| Import (TIFF incl. multi-page, JPEG, PNG, BMP) | LibTiff.NET (BSD) | Byte-identical copies; lossless multi-page split | ✅ |
+| OCR, page + field region, offline | Sdcb.PaddleOCR, PP-OCRv5 mobile (Apache-2.0) | 18/18 words; field exact; 2.2–4.0 s per page; 0 network endpoints on host | ✅ (Sandbox run pending) |
+| Barcode / QR | ZXing.Net (Apache-2.0) | 3/3 incl. 1-bit G4; 0.3–1 s per page | ✅ |
+| Patch codes | Own OpenCV check (hardware via TWAIN preferred) | 6/6 generated sheets; real Kodak sheet + hardware in 1.1 | 🟡 |
+| Deskew, blank page, orientation | OpenCvSharp4 (Apache-2.0) + PaddleOCR | Angles within 0.05°; blank rule needs the "no text" condition (M3) | ✅ |
+| SQLite metadata | EF Core + SQLite (MIT / public domain) | Metadata only, 0 BLOBs | ✅ |
+| PDF-OCR | PDFsharp 6.2.4 (MIT; 6.5 is AGPL, R12) | Searchable in MuPDF + PDFium, words on the right spot | ✅ (library decision before M4) |
+| Multi-page TIFF | LibTiff.NET (BSD) | G4 / LZW, real DPI, pages in order | ✅ |
+| Installer, offline | Inno Setup | 118.8 MB with models + natives + VC++ runtime | ✅ (Sandbox run pending; unsigned, R1) |
+
+**Recommendation on D6: GO, keep the open-source stack.** Conditional on Task 1.1.
+- Every capability except scan acquisition works end to end, offline, from a self-contained install.
+- It runs on permissive libraries (Apache/MIT/BSD) at acceptable speed on a mid-range CPU. Speed is managed by the
+  background analysis queue, not by a different library.
+- The problems found are packaging and licensing (VC++ runtime, PDFsharp licence, code signing, Media Foundation).
+  Each has a known fix. None is a capability gap that a paid all-in-one SDK would close.
+- A paid SDK would replace Paddle/OpenCV/ZXing/PDFsharp, which already work. It would not remove the need for code
+  signing or a 32-bit TWAIN path.
+
+**What would reopen D6 (per section B):**
+- Task 1.1 shows the AD7100, or typical client-site scanners, can't be driven reliably through NAPS2.Sdk or NTwain +
+  our own 32-bit worker.
+- The team lead rejects both LGPL (NAPS2) and building our own worker.
+
+Real-scan OCR accuracy (R6) also feeds this decision, and is measured in Task 1.1.
+
+**Open before M2 UI work** (team lead):
+- D8 scanning library (NAPS2 LGPL vs NTwain + own worker)
+- PDF library (R12)
+- code-signing certificate (R1, pilot blocker)
+- M0 gate review
+
+**Do Task 1.1 before M2's "Scan & import UI" slice ships.**
