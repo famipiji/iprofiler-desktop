@@ -163,6 +163,12 @@ Also (D7): copy a set of **legacy ScanStation config files** from one real site 
 - Violation check: temporarily added EF Core + a `DbContext` to Application, Serilog + `Log.Information` to Infrastructure, `Microsoft.Extensions.Logging` to Core, and a `catch { }` + `Environment.CurrentDirectory` in Application → **9 failed** (each new rule caught its violation). Reverted → 47/47 pass.
 - App run: `IProfiler.App.exe` started with working directory `C:\Windows`; window "iProfiler Desktop" listed the 8 fake pages; closed with exit code 0. Log written: `%LOCALAPPDATA%\iProfiler\logs\iprofiler-20261028.log` (1,054 bytes) with startup (install + data paths), "Fake scan on fake-scanner at 300 dpi", "Loaded 8 pages from Fake Scanner (TWAIN)", and shutdown lines. The host test also checks the log file appears (in a temp data folder).
 
+- Review (2026-10-28): ✅ approved. Follow-ups:
+  - **Task 0.5:** if startup fails before logging is up (e.g. data folder not writable), show a message box and write a fallback log, instead of a silent crash; also show a friendly message for unhandled UI exceptions (still log + exit).
+  - **Task 1.4:** add `Page.DeskewAngle` (double?, metadata only, applied on export like `Rotation`).
+  - **M3:** legacy barcode separation also has fixed-value / char-count / regex matching (doc §2), and keyword zone has regex; `BarcodeSettings` only does symbology + prefix today. Extend the settings records then.
+  - **M1/M2 performance note:** each classifier re-reads the page image from disk (OCR, barcode, white ratio). Fine for now; add a per-page decode cache if batch timings need it.
+
 ### Task 0.5: Installer proven on a clean machine
 
 1. `dotnet publish IProfiler.App -c Release -r win-x64 --self-contained true`, so the client needs **no** .NET runtime installed (doc §1: "a runtime the client's machine won't already have").
